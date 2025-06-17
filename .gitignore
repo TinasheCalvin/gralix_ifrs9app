@@ -1,0 +1,13 @@
+.myvenv/
+ifrs9app/db.sqlite3
+db.sqlite3
+vIfrs9/
+Test Data/
+*.pyc
+
+# Virtual Environment
+venv/
+env/
+.env/
+.venv/
+ENV/

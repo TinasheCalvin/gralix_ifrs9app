@@ -1,0 +1,13 @@
+psycopg2-binary
+whitenoise
+gunicorn
+notebook
+Django
+python-dateutil
+numpy
+Jinja2
+django-widget-tweaks
+plotly
+scipy
+pandarallel
+numpy_financial

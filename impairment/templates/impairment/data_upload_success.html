@@ -1,0 +1,35 @@
+{% extends 'impairment/project_view.html' %}
+{% load static %}
+{% block content %}
+
+<div class="container d-flex justify-content-center py-4">
+  <div class="col-lg-8">
+    <div class="card my-4">
+      <div class="card-header p-0 position-relative mt-n4 mx-3 z-index-2">
+        <div class="bg-gradient-secondary shadow-primary border-radius-lg pt-4 pb-3">
+          <h6 class="text-white text-capitalize text-center ps-3">Data Upload Successful</h6>
+        </div>
+      </div>
+      <div class="row mt-4">
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  document.getElementById('uploadBtn').addEventListener('click', function() {
+    var uploadForms = document.getElementById('uploadForms');
+    if (uploadForms.classList.contains('d-none')) {
+      uploadForms.classList.remove('d-none');
+    } else {
+      uploadForms.classList.add('d-none');
+    }
+  });
+
+  document.getElementById('dbBtn').addEventListener('click', function() {
+    document.getElementById('uploadForms').classList.add('d-none');
+  });
+</script>
+
+{% endblock %}

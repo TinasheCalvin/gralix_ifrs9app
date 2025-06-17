@@ -1,0 +1,110 @@
+{% extends 'impairment/base.html' %}
+{% load static %}
+{% load widget_tweaks %}
+{% block content %}
+
+<div class="container d-flex justify-content-center py-4">
+  <div class="col-lg-8">
+    <div class="card my-4">
+      <div class="card-header p-0 position-relative mt-n4 mx-3 z-index-2">
+        <div class="bg-gradient-secondary shadow-primary border-radius-lg pt-4 pb-3">
+          <h6 class="text-white text-capitalize text-center ps-3">Select Your Data Source</h6>
+        </div>
+      </div>
+      <div class="row mt-4">
+        <div class="card-body px-0 pb-2">
+          <div class="d-flex justify-content-center">
+            <div class="col-lg-4 p-3">
+              <div class="text-center">
+                <button type="button" id="uploadBtn" class="btn bg-gradient-secondary w-100 my-4 mb-2">
+                  <i class="material-icons opacity-10">upload</i> Upload Files
+                </button>
+                <p class="text-muted">Choose this option to upload historical loan data, current loan book, and recovery data.</p>
+              </div>
+            </div>
+            <div class="col-lg-4 p-3">
+              <div class="text-center">
+                <button type="button" id="dbBtn" class="btn bg-gradient-secondary w-100 my-4 mb-2">
+                  <i class="material-icons opacity-10">data_usage</i> Database
+                </button>
+                <p class="text-muted">Select this option to fetch data directly from the connected database.</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Hidden Upload Forms (Visible When Upload Button is Clicked) -->
+          <div id="uploadForms" class="d-none mt-4">
+            
+            <!-- Historical Loan Data Form -->
+            <form action="{% url 'upload_historical_loan_data' company.slug project.pk %}" enctype="multipart/form-data" method="post">
+              {% csrf_token %}
+              <div class="row justify-content-center">
+                <div class="col-md-6">
+                  <strong>Select File:</strong><input type="file" name="historical_loan_data" class="form-control">
+                </div>
+              </div>
+              <div class="row justify-content-center my-4">
+                <div class="col-lg-6">
+                  <button type="submit" for="historical_loan_data" class="btn bg-gradient-primary w-100">Upload Historical Loan Data</button>
+                </div>
+                <div class="row justify-content-center">
+                  {% if messages %}
+                    {% for message in messages %}
+                      {% if 'historical' in message.extra_tags %}
+                        <p class="text-success">{{ message }}</p>
+                      {% endif %}
+                    {% endfor %}
+                  {% endif %}
+                </div>
+              </div>
+            </form>
+
+            <hr>
+
+            <!-- Current Loan Book Form -->
+            <form action="{% url 'upload_current_loan_book' company.slug project.pk %}" enctype="multipart/form-data" method="post">
+              {% csrf_token %}
+              <div class="row justify-content-center">
+                <div class="col-md-6">
+                  <strong>Select File:</strong><input type="file" name="current_loan_book" class="form-control">
+                </div>
+              </div>
+              <div class="row justify-content-center my-4">
+                <div class="col-lg-6">
+                  <button type="submit" for="current_loan_book" class="btn bg-gradient-primary w-100">Upload Current Loan Book</button>
+                </div>
+                <div class="row justify-content-center">
+                  {% if messages %}
+                    {% for message in messages %}
+                      {% if 'current' in message.extra_tags %}
+                        <p class="text-success">{{ message }}</p>
+                      {% endif %}
+                    {% endfor %}
+                  {% endif %}
+                </div>
+              </div>
+            </form>
+
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  document.getElementById('uploadBtn').addEventListener('click', function() {
+    var uploadForms = document.getElementById('uploadForms');
+    if (uploadForms.classList.contains('d-none')) {
+      uploadForms.classList.remove('d-none');
+    } else {
+      uploadForms.classList.add('d-none');
+    }
+  });
+
+  document.getElementById('dbBtn').addEventListener('click', function() {
+    document.getElementById('uploadForms').classList.add('d-none');
+  });
+</script>
+
+{% endblock %}
