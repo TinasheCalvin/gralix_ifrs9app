@@ -1,6 +1,7 @@
 from django import forms
 from django.contrib.auth.forms import UserCreationForm
-from django.contrib.auth.models import User
+# from django.contrib.auth.models import User
+from My_Users.models import MyUser as User # imported MyUser model instead of default Django User
 from .models import Project, Company
 
 
