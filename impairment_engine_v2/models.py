@@ -5,10 +5,14 @@ from django.utils.text import slugify
 from decimal import Decimal
 import uuid
 from My_Users.models import MyUser
+from datetime import date
+
 
 class Company(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    name = models.CharField(max_length=200, unique=True)
+    name = models.CharField(max_length=100, unique=True)
+    description = models.TextField(max_length=200, blank=True)
+    slug = models.SlugField(max_length=100, unique=True, blank=True)
     country = models.CharField(max_length=100, default='Zambia')
     base_currency = models.CharField(max_length=3, default='ZMW')
 
@@ -42,6 +46,11 @@ class Company(models.Model):
     class Meta:
         verbose_name_plural = "Companies"
         ordering = ['name']
+
+    def save(self, *args, **kwargs):
+        if not self.slug:
+            self.slug = slugify(self.name)
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return f"{self.name}"
@@ -77,6 +86,7 @@ class Project(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name='projects')
     name = models.CharField(max_length=200)
+    slug = models.SlugField(max_length=200, blank=True)
     description = models.TextField(blank=True)
     reporting_date = models.DateField(help_text="As-of date for this analysis")
 
@@ -91,181 +101,255 @@ class Project(models.Model):
     arrears_report_uploaded = models.BooleanField(default=False)
     branch_mapping_applied = models.BooleanField(default=False)
 
-    # Processing summary
+    # NEW: Comprehensive JSON Data Storage
+    loan_data = models.JSONField(
+        default=dict, blank=True,
+        help_text="Complete loan report data as JSON array"
+    )
+    arrears_data = models.JSONField(
+        default=dict, blank=True,
+        help_text="Complete arrears report data as JSON array"
+    )
+
+    # IFRS9 Processing Results as JSON
+    ifrs9_staging_data = models.JSONField(
+        default=dict, blank=True,
+        help_text="IFRS9 staging results for all accounts"
+    )
+    ecl_calculation_data = models.JSONField(
+        default=dict, blank=True,
+        help_text="ECL calculation results for all accounts"
+    )
+
+    # Data validation and processing metadata
+    data_validation_errors = models.JSONField(
+        default=list, blank=True,
+        help_text="Validation errors found in uploaded data"
+    )
+    data_processing_log = models.JSONField(
+        default=list, blank=True,
+        help_text="Log of data processing steps and transformations"
+    )
+
+    # Processing summary (computed from JSON data)
     total_loans = models.IntegerField(default=0)
     total_exposure = models.DecimalField(max_digits=20, decimal_places=2, default=0)
     total_ecl = models.DecimalField(max_digits=20, decimal_places=2, default=0)
+
+    # IFRS9 Processing Results as JSON
+    upload_metadata  = models.JSONField(
+        default=dict, blank=True,
+        help_text="Data Upload Metadata"
+    )
 
     class Meta:
         unique_together = ['company', 'name']
         ordering = ['company', '-reporting_date', 'name']
 
+    def save(self, *args, **kwargs):
+        if not self.slug:
+            self.slug = slugify(f"{self.company.slug}-{self.name}-{self.reporting_date}")
+        super().save(*args, **kwargs)
+
+    def get_loan_accounts(self):
+        """Get loan accounts from JSON data"""
+        return self.loan_data.get('accounts', [])
+
+    def get_arrears_accounts(self):
+        """Get arrears accounts from JSON data"""
+        return self.arrears_data.get('accounts', [])
+
+    def get_loan_by_account_number(self, account_number):
+        """Get specific loan account by account number"""
+        loans = self.get_loan_accounts()
+        return next((loan for loan in loans if loan.get('account_number') == account_number), None)
+
+    def get_arrears_by_account_number(self, account_number):
+        """Get specific arrears account by account number"""
+        arrears = self.get_arrears_accounts()
+        return next((arr for arr in arrears if arr.get('account_number') == account_number), None)
+
+    def get_ifrs9_stages(self):
+        """Get IFRS9 staging data from JSON"""
+        return self.ifrs9_staging_data.get('stages', [])
+
+    def get_ecl_calculations(self):
+        """Get ECL calculation data from JSON"""
+        return self.ecl_calculation_data.get('calculations', [])
+
+    def get_ifrs9_stage_by_account(self, account_number):
+        """Get IFRS9 stage for specific account"""
+        stages = self.get_ifrs9_stages()
+        return next((stage for stage in stages if stage.get('account_number') == account_number), None)
+
+    def get_ecl_calculation_by_account(self, account_number):
+        """Get ECL calculation for specific account"""
+        calculations = self.get_ecl_calculations()
+        return next((calc for calc in calculations if calc.get('account_number') == account_number), None)
+
+    def update_processing_summary(self):
+        """Update summary fields from JSON data"""
+        loans = self.get_loan_accounts()
+        ecl_calculations = self.get_ecl_calculations()
+
+        self.total_loans = len(loans)
+        self.total_exposure = sum(Decimal(str(loan.get('balance', 0))) for loan in loans)
+        self.total_ecl = sum(Decimal(str(calc.get('final_ecl', 0))) for calc in ecl_calculations)
+        self.save(update_fields=['total_loans', 'total_exposure', 'total_ecl'])
+
+    def update_ifrs9_stage(self, account_number, stage_data):
+        """Update or add IFRS9 stage for an account"""
+        stages = self.get_ifrs9_stages()
+        existing_stage = next((i for i, stage in enumerate(stages)
+                               if stage.get('account_number') == account_number), None)
+
+        if existing_stage is not None:
+            stages[existing_stage] = stage_data
+        else:
+            stages.append(stage_data)
+
+        self.ifrs9_staging_data['stages'] = stages
+        self.save(update_fields=['ifrs9_staging_data'])
+
+    def update_ecl_calculation(self, account_number, ecl_data):
+        """Update or add ECL calculation for an account"""
+        calculations = self.get_ecl_calculations()
+        existing_calc = next((i for i, calc in enumerate(calculations)
+                              if calc.get('account_number') == account_number), None)
+
+        if existing_calc is not None:
+            calculations[existing_calc] = ecl_data
+        else:
+            calculations.append(ecl_data)
+
+        self.ecl_calculation_data['calculations'] = calculations
+        self.save(update_fields=['ecl_calculation_data'])
+
     def __str__(self):
         return f"{self.company.name} - {self.name} ({self.reporting_date})"
 
 
-class LoanAccount(models.Model):
-    """Standardized loan account data from loan reports"""
-    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='loan_accounts')
+class IFRS9StageSummary(models.Model):
+    """Simplified staging summary for reporting and complex queries"""
+    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='stage_summaries')
 
-    # Core identifiers - standardized
-    account_number = models.CharField(max_length=50, db_index=True, help_text="Account/Contract Number")
+    # Summary by stage
+    stage_1_count = models.IntegerField(default=0)
+    stage_1_exposure = models.DecimalField(max_digits=20, decimal_places=2, default=0)
+    stage_1_ecl = models.DecimalField(max_digits=20, decimal_places=2, default=0)
 
-    # Branch information
-    branch = models.CharField(max_length=200)
-    branch_code = models.CharField(max_length=20, blank=True)
+    stage_2_count = models.IntegerField(default=0)
+    stage_2_exposure = models.DecimalField(max_digits=20, decimal_places=2, default=0)
+    stage_2_ecl = models.DecimalField(max_digits=20, decimal_places=2, default=0)
 
-    # Client information - standardized
-    firstname = models.CharField(max_length=100)
-    lastname = models.CharField(max_length=100)
+    stage_3_count = models.IntegerField(default=0)
+    stage_3_exposure = models.DecimalField(max_digits=20, decimal_places=2, default=0)
+    stage_3_ecl = models.DecimalField(max_digits=20, decimal_places=2, default=0)
 
-    # Loan details - standardized
+    # Movement summary
+    stage_1_to_2_count = models.IntegerField(default=0)
+    stage_2_to_1_count = models.IntegerField(default=0)
+    stage_2_to_3_count = models.IntegerField(default=0)
+    stage_3_to_2_count = models.IntegerField(default=0)
+
+    last_updated = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ['project']
+
+    def refresh_from_json(self):
+        """Refresh summary from project's JSON data"""
+        stages = self.project.get_ifrs9_stages()
+        ecl_calcs = self.project.get_ecl_calculations()
+
+        # Create lookup for ECL by account
+        ecl_lookup = {calc['account_number']: calc for calc in ecl_calcs}
+
+        # Reset counters
+        self.stage_1_count = self.stage_1_exposure = self.stage_1_ecl = 0
+        self.stage_2_count = self.stage_2_exposure = self.stage_2_ecl = 0
+        self.stage_3_count = self.stage_3_exposure = self.stage_3_ecl = 0
+
+        for stage in stages:
+            account_number = stage.get('account_number')
+            current_stage = stage.get('current_stage')
+
+            # Get loan and ECL data
+            loan = self.project.get_loan_by_account_number(account_number)
+            ecl = ecl_lookup.get(account_number, {})
+
+            exposure = Decimal(str(loan.get('balance', 0))) if loan else 0
+            ecl_amount = Decimal(str(ecl.get('final_ecl', 0)))
+
+            if current_stage == 'stage_1':
+                self.stage_1_count += 1
+                self.stage_1_exposure += exposure
+                self.stage_1_ecl += ecl_amount
+            elif current_stage == 'stage_2':
+                self.stage_2_count += 1
+                self.stage_2_exposure += exposure
+                self.stage_2_ecl += ecl_amount
+            elif current_stage == 'stage_3':
+                self.stage_3_count += 1
+                self.stage_3_exposure += exposure
+                self.stage_3_ecl += ecl_amount
+
+        self.save()
+
+
+class ECLSummary(models.Model):
+    """ECL summary by segment for reporting"""
+    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='ecl_summaries')
+
+    # Segmentation
     loan_type = models.CharField(max_length=100)
-    opening_date = models.DateField()
-    maturity_date = models.DateField()
-
-    # Financial details - standardized
     currency = models.CharField(max_length=3)
-    loan_amount = models.DecimalField(max_digits=15, decimal_places=2, help_text="Original loan amount")
-    installment_amount = models.DecimalField(max_digits=15, decimal_places=2)
-    balance = models.DecimalField(max_digits=15, decimal_places=2, help_text="Outstanding balance")
-    interest_rate = models.DecimalField(max_digits=5, decimal_places=2, help_text="Annual interest rate %")
-    insurance_fees = models.DecimalField(max_digits=10, decimal_places=2, default=0)
 
-    # Derived fields for CBL computation
-    days_to_maturity = models.IntegerField(blank=True, null=True)
-    original_term_months = models.IntegerField(blank=True, null=True)
-    remaining_term_months = models.IntegerField(blank=True, null=True)
+    # Summary metrics
+    account_count = models.IntegerField(default=0)
+    total_exposure = models.DecimalField(max_digits=20, decimal_places=2, default=0)
+    total_ecl_12m = models.DecimalField(max_digits=20, decimal_places=2, default=0)
+    total_ecl_lifetime = models.DecimalField(max_digits=20, decimal_places=2, default=0)
+    total_final_ecl = models.DecimalField(max_digits=20, decimal_places=2, default=0)
 
-    # Risk indicators
-    is_restructured = models.BooleanField(default=False)
-    is_refinanced = models.BooleanField(default=False)
+    # Coverage ratios
+    ecl_coverage_ratio = models.DecimalField(max_digits=10, decimal_places=6, default=0)
 
-    # Timestamps
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
+    last_updated = models.DateTimeField(auto_now=True)
 
     class Meta:
-        unique_together = ['project', 'account_number']
-        indexes = [
-            models.Index(fields=['project', 'account_number']),
-            models.Index(fields=['loan_type', 'currency']),
-            models.Index(fields=['opening_date', 'maturity_date']),
-        ]
+        unique_together = ['project', 'loan_type', 'currency']
 
-    def save(self, *args, **kwargs):
-        # Calculate derived fields
-        if self.opening_date and self.maturity_date:
-            self.days_to_maturity = (self.maturity_date - date.today()).days
-            self.original_term_months = (self.maturity_date.year - self.opening_date.year) * 12 + \
-                                        (self.maturity_date.month - self.opening_date.month)
-            self.remaining_term_months = (self.maturity_date.year - date.today().year) * 12 + \
-                                         (self.maturity_date.month - date.today().month)
-        super().save(*args, **kwargs)
+    def refresh_from_json(self):
+        """Refresh summary from project's JSON data"""
+        loans = self.project.get_loan_accounts()
+        ecl_calcs = self.project.get_ecl_calculations()
 
-    def __str__(self):
-        return f"{self.account_number} - {self.firstname} {self.lastname}"
+        # Filter for this segment
+        segment_loans = [loan for loan in loans
+                         if loan.get('loan_type') == self.loan_type
+                         and loan.get('currency') == self.currency]
 
+        segment_ecls = [ecl for ecl in ecl_calcs
+                        if any(loan.get('account_number') == ecl.get('account_number')
+                               for loan in segment_loans)]
 
-class ArrearsAccount(models.Model):
-    """Standardized arrears data - subset of loans in default"""
-    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='arrears_accounts')
-    loan_account = models.ForeignKey(
-        LoanAccount, on_delete=models.CASCADE, related_name='arrears_data',
-        help_text="Link to corresponding loan account"
-    )
+        self.account_count = len(segment_loans)
+        self.total_exposure = sum(Decimal(str(loan.get('balance', 0))) for loan in segment_loans)
+        self.total_ecl_12m = sum(Decimal(str(ecl.get('ecl_12_month', 0))) for ecl in segment_ecls)
+        self.total_ecl_lifetime = sum(Decimal(str(ecl.get('ecl_lifetime', 0))) for ecl in segment_ecls)
+        self.total_final_ecl = sum(Decimal(str(ecl.get('final_ecl', 0))) for ecl in segment_ecls)
 
-    # Core arrears data - standardized
-    account_number = models.CharField(max_length=50, db_index=True)
-    client_name = models.CharField(max_length=200)
-    currency = models.CharField(max_length=3)
-    capital_balance = models.DecimalField(max_digits=15, decimal_places=2)
-    arrears_amount = models.DecimalField(max_digits=15, decimal_places=2, help_text="Amount in arrears")
-    exposure = models.DecimalField(max_digits=15, decimal_places=2, help_text="Capital balance + arrears")
+        if self.total_exposure > 0:
+            self.ecl_coverage_ratio = (self.total_final_ecl / self.total_exposure) * 100
 
-    # Additional fields needed for staging
-    days_past_due = models.IntegerField(help_text="Days past due for staging")
-    first_delinquency_date = models.DateField(blank=True, null=True)
-    last_payment_date = models.DateField(blank=True, null=True)
-    last_payment_amount = models.DecimalField(max_digits=15, decimal_places=2, blank=True, null=True)
-
-    # Restructuring/forbearance indicators for staging
-    is_restructured = models.BooleanField(default=False)
-    restructure_date = models.DateField(blank=True, null=True)
-    forbearance_granted = models.BooleanField(default=False)
-
-    # # Collection status
-    # legal_action_initiated = models.BooleanField(default=False)
-    # legal_action_date = models.DateField(blank=True, null=True)
-    # collateral_status = models.CharField(max_length=50, blank=True)
-    #
-    # # Provisioning (if existing)
-    # existing_provision = models.DecimalField(max_digits=15, decimal_places=2, default=0)
-
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        unique_together = ['project', 'account_number']
-        indexes = [
-            models.Index(fields=['days_past_due']),
-            models.Index(fields=['first_delinquency_date']),
-        ]
-
-    def __str__(self):
-        return f"{self.account_number} - {self.days_past_due} DPD - {self.exposure}"
-
-
-class IFRS9Stage(models.Model):
-    """IFRS9 Stage classification for each loan"""
-    STAGE_CHOICES = [
-        ('stage_1', 'Stage 1 - 12-month ECL'),
-        ('stage_2', 'Stage 2 - Lifetime ECL (not credit-impaired)'),
-        ('stage_3', 'Stage 3 - Lifetime ECL (credit-impaired)'),
-        ('poci', 'POCI - Purchased or Originated Credit-Impaired')
-    ]
-
-    loan_account = models.OneToOneField(LoanAccount, on_delete=models.CASCADE, related_name='ifrs9_stage')
-
-    # Current stage classification
-    current_stage = models.CharField(max_length=10, choices=STAGE_CHOICES)
-    previous_stage = models.CharField(max_length=10, blank=True)
-    stage_movement_date = models.DateField(blank=True, null=True)
-
-    # Staging criteria met
-    dpd_criteria_met = models.BooleanField(default=False, help_text="Days past due criteria")
-    sicr_criteria_met = models.BooleanField(default=False, help_text="SICR criteria")
-    qualitative_criteria_met = models.BooleanField(default=False, help_text="Qualitative criteria")
-
-    # SICR indicators
-    sicr_reason = models.TextField(blank=True)
-    pd_deterioration_factor = models.DecimalField(
-        max_digits=10, decimal_places=4, blank=True, null=True,
-        help_text="Factor by which PD has increased"
-    )
-
-    # Qualitative factors
-    restructured = models.BooleanField(default=False)
-    forbearance_applied = models.BooleanField(default=False)
-    watch_list = models.BooleanField(default=False)
-
-    # Quantitative factors
-    days_past_due = models.IntegerField(default=0)
-    consecutive_missed_payments = models.IntegerField(default=0)
-
-    # Staging decision audit
-    staging_rationale = models.TextField(blank=True, help_text="Rationale for staging decision")
-    auto_staged = models.BooleanField(default=True, help_text="Automatically staged vs manual override")
-
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    def __str__(self):
-        return f"{self.loan_account.account_number} - {self.current_stage}"
+        self.save()
 
 
 class CBLParameters(models.Model):
     """CBL parameters by loan type/segment for PD, LGD, EAD calculations"""
     project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='cbl_parameters')
+    slug = models.SlugField(max_length=200, blank=True)
 
     # Segmentation
     loan_type = models.CharField(max_length=100)
@@ -341,74 +425,13 @@ class CBLParameters(models.Model):
         unique_together = ['project', 'loan_type', 'currency', 'risk_segment']
         ordering = ['loan_type', 'currency']
 
-    def __str__(self):
-        return f"{self.project.name} - {self.loan_type} ({self.currency})"
-
-
-class ECLCalculation(models.Model):
-    """Individual ECL calculations for each loan"""
-    loan_account = models.OneToOneField(LoanAccount, on_delete=models.CASCADE, related_name='ecl_calculation')
-
-    # EAD (Exposure at Default)
-    ead_amount = models.DecimalField(
-        max_digits=15, decimal_places=2,
-        help_text="Exposure at Default"
-    )
-    outstanding_balance = models.DecimalField(max_digits=15, decimal_places=2)
-    undrawn_commitment = models.DecimalField(max_digits=15, decimal_places=2, default=0)
-
-    # Applied rates from parameters
-    applied_pd_12m = models.DecimalField(max_digits=10, decimal_places=6)
-    applied_pd_lifetime = models.DecimalField(max_digits=10, decimal_places=6)
-    applied_lgd = models.DecimalField(max_digits=5, decimal_places=2)
-
-    # ECL components
-    ecl_12_month = models.DecimalField(
-        max_digits=15, decimal_places=2,
-        help_text="12-month ECL (Stage 1)"
-    )
-    ecl_lifetime = models.DecimalField(
-        max_digits=15, decimal_places=2,
-        help_text="Lifetime ECL (Stage 2/3)"
-    )
-
-    # Final ECL based on IFRS9 stage
-    final_ecl = models.DecimalField(
-        max_digits=15, decimal_places=2,
-        help_text="Final ECL based on staging"
-    )
-
-    # Supporting calculations
-    present_value_factor = models.DecimalField(max_digits=10, decimal_places=6, default=1)
-    macro_adjustment = models.DecimalField(max_digits=10, decimal_places=6, default=1)
-    forward_looking_adjustment = models.DecimalField(max_digits=10, decimal_places=6, default=1)
-
-    # Calculation metadata
-    calculation_method = models.CharField(
-        max_length=50,
-        choices=[
-            ('collective', 'Collective Assessment'),
-            ('individual', 'Individual Assessment'),
-            ('simplified', 'Simplified Approach')
-        ],
-        default='collective'
-    )
-    calculation_date = models.DateTimeField(auto_now=True)
-
-    # ECL coverage ratio
-    ecl_coverage_ratio = models.DecimalField(
-        max_digits=10, decimal_places=6, blank=True, null=True,
-        help_text="ECL as % of exposure"
-    )
-
     def save(self, *args, **kwargs):
-        # Calculate ECL coverage ratio
-        if self.ead_amount > 0:
-            self.ecl_coverage_ratio = (self.final_ecl / self.ead_amount) * 100
+        if not self.slug:
+            self.slug = slugify(f"{self.project.slug}-params-{self.loan_type}-{self.currency}")
         super().save(*args, **kwargs)
 
     def __str__(self):
-        return f"{self.loan_account.account_number} - ECL: {self.final_ecl}"
+        return f"{self.project.name} - {self.loan_type} ({self.currency})"
 
 
 class DataUpload(models.Model):
@@ -441,6 +464,11 @@ class DataUpload(models.Model):
     error_log = models.TextField(blank=True)
     validation_errors = models.JSONField(default=list, blank=True)
 
+    raw_data_sample = models.JSONField(
+        default=dict, blank=True,
+        help_text="Sample of raw uploaded data for debugging"
+    )
+
     # Upload metadata
     uploaded_by = models.ForeignKey(MyUser, on_delete=models.SET_NULL, null=True)
     uploaded_at = models.DateTimeField(auto_now_add=True)
@@ -454,3 +482,43 @@ class DataUpload(models.Model):
 
 
 
+class DataValidationRule(models.Model):
+    """Define validation rules for loan and arrears data"""
+    RULE_TYPES = [
+        ('required_field', 'Required Field'),
+        ('data_type', 'Data Type Validation'),
+        ('range_check', 'Range/Boundary Check'),
+        ('format_check', 'Format Validation'),
+        ('business_rule', 'Business Logic Rule'),
+        ('cross_reference', 'Cross-Reference Check')
+    ]
+
+    company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name='validation_rules')
+    rule_name = models.CharField(max_length=100)
+    rule_type = models.CharField(max_length=20, choices=RULE_TYPES)
+    data_type = models.CharField(max_length=20, choices=[('loan', 'Loan Data'), ('arrears', 'Arrears Data')])
+
+    # Rule configuration
+    field_name = models.CharField(max_length=50)
+    validation_config = models.JSONField(
+        default=dict,
+        help_text="Configuration for the validation rule (e.g., min/max values, regex patterns)"
+    )
+
+    error_message = models.TextField(help_text="Error message to display when validation fails")
+    is_active = models.BooleanField(default=True)
+    severity = models.CharField(
+        max_length=10,
+        choices=[('error', 'Error'), ('warning', 'Warning'), ('info', 'Info')],
+        default='error'
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    created_by = models.ForeignKey(MyUser, on_delete=models.SET_NULL, null=True)
+
+    class Meta:
+        unique_together = ['company', 'rule_name', 'data_type']
+        ordering = ['data_type', 'rule_name']
+
+    def __str__(self):
+        return f"{self.company.name} - {self.rule_name} ({self.data_type})"

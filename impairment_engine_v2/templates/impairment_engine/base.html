@@ -1,0 +1,163 @@
+{% load static %}
+
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+  <link rel="apple-touch-icon" sizes="76x76" href="{% static 'impairment/assets/img/calculate.svg' %}">
+  <link rel="icon" type="image/png" href="{% static 'impairment/assets/img/calculate.svg' %}">
+  <title>
+    IFRS 9 Impairment Engine
+  </title>
+  <!-- Core CSS Files -->
+  <link rel="stylesheet" type="text/css" href="{% static 'impairment/assets/material-dashboard.css' %}" />
+  <link href="{% static 'impairment/assets/css/nucleo-icons.css' %}" rel="stylesheet" />
+  <link href="{% static 'impairment/assets/css/nucleo-svg.css' %}" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
+  <link id="pagestyle" href="{% static 'impairment/assets/css/material-dashboard.css' %}" rel="stylesheet" />
+</head>
+
+<body class="g-sidenav-show bg-gray-200">
+  <!-- Sidebar -->
+  <aside class="sidenav navbar navbar-vertical navbar-expand-xs border-0 border-radius-xl my-3 fixed-start ms-3 bg-gradient-dark" id="sidenav-main">
+    <div class="sidenav-header">
+      <i class="fas fa-times p-3 cursor-pointer text-white opacity-5 position-absolute end-0 top-0 d-none d-xl-none" aria-hidden="true" id="iconSidenav"></i>
+      <a class="navbar-brand m-0" href="#">
+        <h6 class="ms-1 font-weight-bold text-white">IFRS 9 Impairment Engine</h6>
+      </a>
+    </div>
+    <hr class="horizontal light mt-0 mb-2">
+    <div class="collapse navbar-collapse w-auto" id="sidenav-collapse-main">
+      <ul class="navbar-nav">
+        <li class="nav-item">
+          <a class="nav-link text-white {% if request.path == '/' %}active bg-gradient-secondary{% endif %}" href="{% url 'index' %}">
+            
+            <span class="nav-link-text ms-1">Company View</span>
+          </a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link text-white {% if request.path == '/documentation/' %}active bg-gradient-secondary{% endif %}" href="#">
+            
+            <span class="nav-link-text ms-1">IFRS 9 Documentation</span>
+          </a>
+        </li>
+
+        {% if company %}
+        <li class="nav-item">
+          {% with request.resolver_match.url_name as url_name %}
+          <a class="nav-link text-white {% if url_name == 'company_projects' %}active bg-gradient-secondary{% endif %}" href="{% url 'company_projects' company.slug %}">
+            
+            <span class="nav-link-text ms-1">Projects</span>
+          </a>
+          {% endwith %}
+        </li>
+        {% endif %}
+        <hr class="horizontal light mt-3 mb-2">  
+
+        <!--Project-Specific Links -->
+        {% if project %}
+        
+        <li class="nav-item">
+          <a class="nav-link text-white" href="#">
+            <i class="material-icons opacity-10">menu_book</i>
+            <span class="nav-link-text ms-1">{{ project.name }}</span>
+          </a>
+        </li>
+        <ul class="navbar-nav ps-3">
+
+          <li class="nav-item">
+            {% with request.resolver_match.url_name as url_name %}
+            <a class="nav-link text-white {% if url_name == 'data_source' %} active bg-gradient-secondary{% endif %}" href="{% url 'data_source' company.slug project.pk %}">
+         
+              <span class="nav-link-text ms-1">Data Source</span>
+            </a>
+            {% endwith %}
+          </li>
+          <li class="nav-item">
+            {% with request.resolver_match.url_name as url_name %}
+            <a class="nav-link text-white {% if url_name == 'dashboard' %} active bg-gradient-secondary{% endif %}" href="{% url 'dashboard' company.slug project.pk %}">
+              
+              <span class="nav-link-text ms-1">Dashboard</span>
+            </a>
+            {% endwith %}
+          </li>
+          <li class="nav-item">
+            {% with request.resolver_match.url_name as url_name %}
+            <a class="nav-link text-white {% if 'current' in url_name %}active bg-gradient-secondary{% endif %}" href="{% url 'current_stage_1' company.slug project.pk %}">
+            
+              <span class="nav-link-text ms-1">Current Loan Book</span>
+            </a>
+            {% endwith %}
+          </li>
+          <li class="nav-item">
+            {% with request.resolver_match.url_name as url_name %}
+            <a class="nav-link text-white {% if 'probability' in url_name %}active bg-gradient-secondary{% endif %}" href="{% url 'cumulative_probability_of_default' company.slug project.pk %}">
+              
+              <span class="nav-link-text ms-1">Probability of Default</span>
+            </a>
+            {% endwith %}
+          </li>
+          <li class="nav-item">
+            {% with request.resolver_match.url_name as url_name %}
+            <a class="nav-link text-white {% if url_name == 'lgd_analysis' %}active bg-gradient-secondary{% endif %}" href="{% url 'lgd_analysis' company.slug project.pk %}">
+          
+              <span class="nav-link-text ms-1">Loss Given Default</span>
+            </a>
+            {% endwith %}
+          </li>
+          <li class="nav-item">
+            {% with request.resolver_match.url_name as url_name %}
+            <a class="nav-link text-white {% if url_name == 'ead_analysis' %}active bg-gradient-secondary{% endif %}" href="{% url 'ead_analysis' company.slug project.pk %}">
+             
+              <span class="nav-link-text ms-1">Exposure At Default</span>
+            </a>
+            {% endwith %}
+          </li>
+          <li class="nav-item">
+            {% with request.resolver_match.url_name as url_name %}
+            <a class="nav-link text-white {% if url_name == 'forward_looking_information' %}active bg-gradient-secondary{% endif %}" href="{% url 'forward_looking_information' company.slug project.pk %}">
+              
+              <span class="nav-link-text ms-1">Forward-Looking Information</span>
+            </a>
+            {% endwith %}
+          </li>
+          <li class="nav-item">
+            {% with request.resolver_match.url_name as url_name %}
+            <a class="nav-link text-white {% if url_name == 'fetch_ecl' %}active bg-gradient-secondary{% endif %}" href="{% url 'fetch_ecl' company.slug project.pk %}">
+              
+              <span class="nav-link-text ms-1">Expected Credit Loss</span>
+            </a>
+            {% endwith %}
+          </li>
+      </ul>
+        <!-- Add more project-specific links here -->
+        {% endif %}
+      </ul>
+    </div>
+    <div class="sidenav-footer position-absolute w-100 bottom-0">
+      <div class="mx-3">
+        <a class="btn bg-gradient-secondary w-100" href="{% url 'sign_out' %}" type="button">Sign Out</a>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Main Content -->
+  <main class="main-content position-relative max-height-vh-100 h-100 border-radius-lg ">
+    <!-- Placeholder for content blocks -->
+    {% block content %}
+    {% endblock %}
+  </main>
+
+  <!-- Core JS Files -->
+  <script src="{% static 'impairment/assets/js/core/popper.min.js' %}"></script>
+  <script src="{% static 'impairment/assets/js/core/bootstrap.min.js' %}"></script>
+  <script src="{% static 'impairment/assets/js/plugins/perfect-scrollbar.min.js' %}"></script>
+  <script src="{% static 'impairment/assets/js/plugins/smooth-scrollbar.min.js' %}"></script>
+  <script src="{% static 'impairment/assets/js/plugins/chartjs.min.js' %}"></script>
+  <!-- Optional JS logic -->
+  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+</body>
+
+</html>
