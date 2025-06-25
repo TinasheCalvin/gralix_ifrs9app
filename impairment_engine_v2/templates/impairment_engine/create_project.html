@@ -1,0 +1,68 @@
+{% extends 'impairment/base.html' %}
+{% load static %}
+{% load widget_tweaks %}
+{% block content %}
+
+<div class="container-fluid py-4 d-flex justify-content-center align-items-center" style="min-height: 100vh;">
+    <div class="row">
+        <div class="col-lg-12 col-md-8 col-12 mx-auto">
+            <div class="card z-index-0 fadeIn3 fadeInBottom">
+                <div class="card-header p-0 position-relative mt-n4 mx-3 z-index-2">
+                    <div class="bg-gradient-secondary shadow-primary border-radius-lg py-3 pe-1">
+                        <h4 class="text-white font-weight-bolder text-center mt-2 mb-0">Add New Project</h4>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <form role="form" class="text-start" method="POST" action="">
+                        {% csrf_token %}
+
+                        <!-- Error handling -->
+                        {% if form.errors %}
+                        <div class="alert alert-warning" role="alert">
+                            <ul>
+                                {% for field in form %}
+                                    {% for error in field.errors %}
+                                    <li>{{ error }}</li>
+                                    {% endfor %}
+                                {% endfor %}
+                            </ul>
+                        </div>
+                        {% endif %}
+
+                        <!-- Project Name Field -->
+                        <div class="form-group my-3">
+                            <label class="form-label mb-1">{{ form.name.label }}</label>
+                            <div class="input-group input-group-outline">
+                                {{ form.name|add_class:"form-control" }}
+                            </div>
+                        </div>
+
+                        <!-- Description Field -->
+                        <div class="form-group my-3">
+                            <label class="form-label mb-1">{{ form.description.label }}</label>
+                            <div class="input-group input-group-outline">
+                                {{ form.description|add_class:"form-control" }}
+                            </div>
+                        </div>
+
+                        <!-- Reporting Date Field -->
+                        <div class="form-group my-3">
+                            <label class="form-label mb-1">{{ form.reporting_date.label }}</label>
+                            <div class="input-group input-group-outline">
+                                {{ form.reporting_date|add_class:"form-control" }}
+                            </div>
+<!--                            <small class="text-muted">{{ form.reporting_date.help_text }}</small>-->
+                        </div>
+
+                        <!-- Submit button -->
+                        <div class="text-center">
+                            <button type="submit" class="btn bg-gradient-secondary w-100 my-4 mb-2">Add Project</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}

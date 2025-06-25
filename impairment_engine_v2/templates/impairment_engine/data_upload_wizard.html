@@ -1,0 +1,139 @@
+{% extends 'impairment_engine/base.html' %}
+{% load static %}
+
+{% block content %}
+<div class="container d-flex justify-content-center py-4">
+  <div class="col-lg-8">
+    <div class="card my-4">
+      <div class="card-header p-0 position-relative mt-n4 mx-3 z-index-2">
+        <div class="bg-gradient-secondary shadow-primary border-radius-lg pt-4 pb-3">
+          <h6 class="text-white text-capitalize text-center ps-3">Data Upload Wizard - Step {{ step }}</h6>
+        </div>
+      </div>
+
+      <div class="card-body">
+        {% if step == 1 %}
+        <!-- Step 1: File Upload -->
+        <form method="post" enctype="multipart/form-data" action="{% url 'upload_wizard' company_slug=company_slug project_slug=project_slug %}">
+          {% csrf_token %}
+
+          <div class="form-group mb-4">
+            <label class="form-label">Select Excel File</label>
+            <input type="file" class="form-control" name="excel_file" accept=".xlsx,.xls" required>
+          </div>
+
+          <div class="text-center">
+            <button type="submit" class="btn bg-gradient-primary">Next: Select Sheets</button>
+          </div>
+        </form>
+
+        {% elif step == 2 %}
+        <!-- Step 2: Sheet Selection -->
+        <form method="post" action="{% url 'process_sheets' company_slug=company_slug project_slug=project_slug %}">
+          {% csrf_token %}
+
+          <div class="form-group mb-4">
+            <label class="form-label">Select Loan Data Sheet</label>
+            <select class="form-select" name="loan_sheet" required>
+              <option value="">-- Select --</option>
+              {% for sheet in sheet_names %}
+              <option value="{{ sheet }}">{{ sheet }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div class="form-group mb-4">
+            <label class="form-label">Select Arrears Data Sheet</label>
+            <select class="form-select" name="arrears_sheet" required>
+              <option value="">-- Select --</option>
+              {% for sheet in sheet_names %}
+              <option value="{{ sheet }}">{{ sheet }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div class="text-center">
+            <button type="submit" class="btn bg-gradient-primary">Next: Map Columns</button>
+          </div>
+        </form>
+
+        {% elif step == 3 %}
+          <!-- Step 3: Column Mapping -->
+          <form method="post" action="{% url 'process_mapping' company_slug=company_slug project_slug=project_slug %}">
+            {% csrf_token %}
+
+            <h5 class="mb-3">Loan Data Column Mapping</h5>
+            <div class="alert alert-info mb-3">
+              <small><i class="fas fa-info-circle"></i> Fields marked with * can be computed automatically if not mapped.</small>
+            </div>
+
+            {% for field_name, description, is_required in loan_field_config %}
+            <div class="form-group row mb-3">
+              <label class="col-md-4 col-form-label">
+                {{ description }}
+                {% if not is_required %}
+                  <span class="text-muted">*</span>
+                {% endif %}
+              </label>
+              <div class="col-md-8">
+                <select class="form-select" name="loan_{{ field_name }}" {% if is_required %}required{% endif %}>
+                  <option value="">-- Select Column --</option>
+                  {% for column in loan_columns %}
+                  <option value="{{ column }}">{{ column }}</option>
+                  {% endfor %}
+                </select>
+                {% if not is_required %}
+                  <small class="form-text text-muted">
+                    {% if field_name == 'loan_tenor' %}
+                      Will be calculated as: maturity_date - opening_date
+                    {% elif field_name == 'days_to_maturity' %}
+                      Will be calculated as: maturity_date - today
+                    {% endif %}
+                  </small>
+                {% endif %}
+              </div>
+            </div>
+            {% endfor %}
+
+            <hr class="my-4">
+
+            <h5 class="mb-3">Arrears Data Column Mapping</h5>
+            <div class="alert alert-info mb-3">
+              <small><i class="fas fa-info-circle"></i> Fields marked with * can be computed automatically if not mapped.</small>
+            </div>
+
+            {% for field_name, description, is_required in arrears_field_config %}
+            <div class="form-group row mb-3">
+              <label class="col-md-4 col-form-label">
+                {{ description }}
+                {% if not is_required %}
+                  <span class="text-muted">*</span>
+                {% endif %}
+              </label>
+              <div class="col-md-8">
+                <select class="form-select" name="arrears_{{ field_name }}" {% if is_required %}required{% endif %}>
+                  <option value="">-- Select Column --</option>
+                  {% for column in arrears_columns %}
+                  <option value="{{ column }}">{{ column }}</option>
+                  {% endfor %}
+                </select>
+                {% if field_name == 'exposure' %}
+                  <small class="form-text text-muted">
+                    Will be calculated as: capital_balance + arrears_amount
+                  </small>
+                {% endif %}
+              </div>
+            </div>
+            {% endfor %}
+
+            <div class="text-center">
+              <button type="submit" class="btn bg-gradient-primary">Complete Upload</button>
+            </div>
+          </form>
+          {% endif %}
+
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

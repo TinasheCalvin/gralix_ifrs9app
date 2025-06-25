@@ -1,0 +1,186 @@
+{% extends 'impairment/base.html' %}
+{% load static %}
+{% block content %}
+
+<!-- Add Font Awesome CDN for icons in head section -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+{% if messages %}
+<div class="messages">
+    {% for message in messages %}
+      {% if message.extra_tags == 'sign_in'%}
+      <div class="alert alert-{{ message.level_tag }} alert-dismissible" role="alert">
+        {{ message }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+      </div>
+      {% endif %}
+    {% endfor %}
+</div>
+{% endif %}
+
+<div class="container-fluid py-4">
+  <div class="row">
+    <div class="col-12">
+      <div class="card my-4">
+        <div class="card-header p-0 position-relative mt-n4 mx-3 z-index-2">
+          <div class="bg-gradient-secondary shadow-primary border-radius-lg pt-4 pb-3">
+            <div class="d-flex justify-content-between align-items-center">
+              <h6 class="text-white text-capitalize ps-3">Welcome {{ user.first_name }}! Manage Companies</h6>
+              <a class="btn btn-sm btn-light me-3" href="{% url 'create_company' %}">
+                <i class="fas fa-plus me-1"></i> Add Company
+              </a>
+            </div>
+          </div>
+        </div>
+        <div class="card-body px-0 pb-2">
+          <div class="table-responsive p-3">
+            <table class="table align-items-center table-hover">
+              <thead>
+                <tr>
+                  <th class="text-uppercase text-secondary text-xs font-weight-bolder">Company Name</th>
+                  <th class="text-uppercase text-secondary text-xs font-weight-bolder">Total Projects</th>
+                  <th class="text-uppercase text-secondary text-xs font-weight-bolder">Creation Date</th>
+                  <th class="text-uppercase text-secondary text-xs font-weight-bolder">Created By</th>
+                  <th class="text-uppercase text-secondary text-xs font-weight-bolder">Status</th>
+                  <th class="text-uppercase text-secondary text-xs font-weight-bolder">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for company in page_obj %}
+                <tr>
+                  <td>
+                    <div class="d-flex px-2 py-1">
+                      <div class="d-flex flex-column justify-content-center">
+                        <h6 class="mb-0 text-sm">
+                          <a href="{% url 'company_projects' company.slug %}" class="text-decoration-none">
+                            {{ company.name }}
+                          </a>
+                        </h6>
+                      </div>
+                    </div>
+                  </td>
+                  <td>
+                    <span class="text-xs font-weight-bold">{{ company.projects.count }}</span>
+                  </td>
+                  <td>
+                    <span class="text-xs font-weight-bold">{{ company.created_at|date:"d M Y" }}</span>
+                  </td>
+                  <td>
+                    <span class="text-xs font-weight-bold">{{ company.created_by }}</span>
+                  </td>
+                  <td class="align-middle">
+                    {% if company.is_active %}
+                      <span class="badge badge-sm bg-gradient-success">Active</span>
+                    {% else %}
+                      <span class="badge badge-sm bg-gradient-secondary">Inactive</span>
+                    {% endif %}
+                  </td>
+                  <td class="text-center align-middle">
+                    <div class="d-flex justify-content-center">
+                      <div class="btn-group" role="group">
+                        <a href="#"
+                           class="btn btn-sm btn-outline-primary px-3 me-1"
+                           data-bs-toggle="tooltip"
+                           title="View Projects">
+                          <i class="fas fa-folder-open"></i>
+                        </a>
+                        <a href="#"
+                           class="btn btn-sm btn-outline-info px-3 me-1"
+                           data-bs-toggle="tooltip"
+                           title="Edit Settings">
+                          <i class="fas fa-cog"></i>
+                        </a>
+                      </div>
+                    </div>
+                  </td>
+                </tr>
+                {% empty %}
+                <tr>
+                  <td colspan="7" class="text-center py-4">
+                    <div class="d-flex flex-column align-items-center">
+                      <i class="fas fa-building fa-3x text-secondary mb-2"></i>
+                      <h6 class="text-muted">No companies found</h6>
+                      <a href="{% url 'create_company' %}" class="btn btn-sm btn-primary mt-2">
+                        Create Your First Company
+                      </a>
+                    </div>
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+
+          {% if page_obj.paginator.num_pages > 1 %}
+          <div class="card-footer px-0 pb-0">
+            <nav aria-label="Page navigation">
+              <ul class="pagination justify-content-center mb-0">
+                {% if page_obj.has_previous %}
+                  <li class="page-item">
+                    <a class="page-link" href="?page=1" aria-label="First">
+                      <i class="fas fa-angle-double-left"></i>
+                    </a>
+                  </li>
+                  <li class="page-item">
+                    <a class="page-link" href="?page={{ page_obj.previous_page_number }}" aria-label="Previous">
+                      <i class="fas fa-angle-left"></i>
+                    </a>
+                  </li>
+                {% endif %}
+
+                {% for num in page_obj.paginator.page_range %}
+                  {% if page_obj.number == num %}
+                    <li class="page-item active">
+                      <span class="page-link">{{ num }}</span>
+                    </li>
+                  {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+                    <li class="page-item">
+                      <a class="page-link" href="?page={{ num }}">{{ num }}</a>
+                    </li>
+                  {% endif %}
+                {% endfor %}
+
+                {% if page_obj.has_next %}
+                  <li class="page-item">
+                    <a class="page-link" href="?page={{ page_obj.next_page_number }}" aria-label="Next">
+                      <i class="fas fa-angle-right"></i>
+                    </a>
+                  </li>
+                  <li class="page-item">
+                    <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}" aria-label="Last">
+                      <i class="fas fa-angle-double-right"></i>
+                    </a>
+                  </li>
+                {% endif %}
+              </ul>
+            </nav>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+  .table-hover tbody tr:hover {
+    background-color: rgba(0, 0, 0, 0.02);
+  }
+  .badge-sm {
+    padding: 0.35em 0.5em;
+    font-size: 0.7em;
+    line-height: 1;
+  }
+</style>
+
+<script>
+  // Initialize tooltips
+  document.addEventListener('DOMContentLoaded', function() {
+    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+      return new bootstrap.Tooltip(tooltipTriggerEl);
+    });
+  });
+</script>
+
+{% endblock %}
