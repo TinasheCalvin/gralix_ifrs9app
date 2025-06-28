@@ -69,15 +69,15 @@
 
           <li class="nav-item">
             {% with request.resolver_match.url_name as url_name %}
-            <a class="nav-link text-white {% if url_name == 'data_source' %} active bg-gradient-secondary{% endif %}" href="{% url 'data_source' company.slug project.pk %}">
-         
+            <a class="nav-link text-white {% if url_name == 'upload_wizard' %} active bg-gradient-secondary{% endif %}" href="{% url 'upload_wizard' company.slug project.slug %}">
+
               <span class="nav-link-text ms-1">Data Source</span>
             </a>
             {% endwith %}
           </li>
           <li class="nav-item">
             {% with request.resolver_match.url_name as url_name %}
-            <a class="nav-link text-white {% if url_name == 'dashboard' %} active bg-gradient-secondary{% endif %}" href="{% url 'dashboard' company.slug project.pk %}">
+            <a class="nav-link text-white {% if url_name == 'dashboard' %} active bg-gradient-secondary{% endif %}" href="{% url 'upload_wizard' company.slug project.slug %}">
               
               <span class="nav-link-text ms-1">Dashboard</span>
             </a>
@@ -85,7 +85,7 @@
           </li>
           <li class="nav-item">
             {% with request.resolver_match.url_name as url_name %}
-            <a class="nav-link text-white {% if 'current' in url_name %}active bg-gradient-secondary{% endif %}" href="{% url 'current_stage_1' company.slug project.pk %}">
+            <a class="nav-link text-white {% if 'current' in url_name %}active bg-gradient-secondary{% endif %}" href="#">
             
               <span class="nav-link-text ms-1">Current Loan Book</span>
             </a>
@@ -93,7 +93,7 @@
           </li>
           <li class="nav-item">
             {% with request.resolver_match.url_name as url_name %}
-            <a class="nav-link text-white {% if 'probability' in url_name %}active bg-gradient-secondary{% endif %}" href="{% url 'cumulative_probability_of_default' company.slug project.pk %}">
+            <a class="nav-link text-white {% if 'probability' in url_name %}active bg-gradient-secondary{% endif %}" href="#">
               
               <span class="nav-link-text ms-1">Probability of Default</span>
             </a>
@@ -101,7 +101,7 @@
           </li>
           <li class="nav-item">
             {% with request.resolver_match.url_name as url_name %}
-            <a class="nav-link text-white {% if url_name == 'lgd_analysis' %}active bg-gradient-secondary{% endif %}" href="{% url 'lgd_analysis' company.slug project.pk %}">
+            <a class="nav-link text-white {% if url_name == 'lgd_analysis' %}active bg-gradient-secondary{% endif %}" href="#">
           
               <span class="nav-link-text ms-1">Loss Given Default</span>
             </a>
@@ -109,7 +109,7 @@
           </li>
           <li class="nav-item">
             {% with request.resolver_match.url_name as url_name %}
-            <a class="nav-link text-white {% if url_name == 'ead_analysis' %}active bg-gradient-secondary{% endif %}" href="{% url 'ead_analysis' company.slug project.pk %}">
+            <a class="nav-link text-white {% if url_name == 'ead_analysis' %}active bg-gradient-secondary{% endif %}" href="#">
              
               <span class="nav-link-text ms-1">Exposure At Default</span>
             </a>
@@ -117,7 +117,7 @@
           </li>
           <li class="nav-item">
             {% with request.resolver_match.url_name as url_name %}
-            <a class="nav-link text-white {% if url_name == 'forward_looking_information' %}active bg-gradient-secondary{% endif %}" href="{% url 'forward_looking_information' company.slug project.pk %}">
+            <a class="nav-link text-white {% if url_name == 'forward_looking_information' %}active bg-gradient-secondary{% endif %}" href="#">
               
               <span class="nav-link-text ms-1">Forward-Looking Information</span>
             </a>
@@ -125,7 +125,7 @@
           </li>
           <li class="nav-item">
             {% with request.resolver_match.url_name as url_name %}
-            <a class="nav-link text-white {% if url_name == 'fetch_ecl' %}active bg-gradient-secondary{% endif %}" href="{% url 'fetch_ecl' company.slug project.pk %}">
+            <a class="nav-link text-white {% if url_name == 'fetch_ecl' %}active bg-gradient-secondary{% endif %}" href="#">
               
               <span class="nav-link-text ms-1">Expected Credit Loss</span>
             </a>

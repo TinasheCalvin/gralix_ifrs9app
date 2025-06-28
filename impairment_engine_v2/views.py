@@ -170,34 +170,48 @@ def project_detail(request, company_slug, project_slug):
 
 @login_required
 def data_upload_wizard(request, company_slug, project_slug):
+    # Fetch company and project details
+    company = get_object_or_404(Company, slug=company_slug)
+    project = get_object_or_404(Project, slug=project_slug, company=company)
+
+    # Check permissions
+    if not request.user.is_superuser and company.created_by != request.user:
+        messages.error(request, "You don't have permission to view this project dashboard.")
+        return redirect('home')
+
+    # Check if data upload not already processed
+    if project.loan_report_uploaded and project.arrears_report_uploaded and project.status != "":
+        messages.error(request, "Project data has already been uploaded. Navigating to project dashboard.")
+        return redirect('index')
+
     if request.method == 'POST':
-        print(f"DEBUG: POST request received in data_upload_wizard")
         excel_file = request.FILES.get('excel_file')
-        print(f"DEBUG: Excel file received: {excel_file}")
-        print(f"DEBUG: Excel file name: {excel_file.name if excel_file else 'None'}")
+        print(f"INFO: Excel file received: {excel_file}")
+        print(f"INFO: Excel file name: {excel_file.name if excel_file else 'None'}")
 
         if not excel_file:
-            print(f"DEBUG: No excel file provided")
+            print(f"ERROR: No excel file provided")
             messages.error(request, "Please select an excel file for upload.")
             return render(request, 'impairment_engine/data_upload_wizard.html', {
                 'company_slug': company_slug,
                 'project_slug': project_slug,
+                'company': company,  # Added this
+                'project': project,  # Added this
                 'step': 1
             })
 
         try:
-            print(f"DEBUG: Attempting to read Excel file")
+            print(f"INFO: Attempting to read Excel file")
             # Reset file pointer to beginning
             excel_file.seek(0)
             xlsx = pd.ExcelFile(excel_file)
-            print(f"DEBUG: Excel file loaded successfully")
-            print(f"DEBUG: Sheet names: {xlsx.sheet_names}")
+            print(f"INFO: Excel file loaded successfully")
+            print(f"INFO: Sheet names: {xlsx.sheet_names}")
 
             # Read file content and encode as base64 for session storage
             excel_file.seek(0)  # Reset file pointer again
             file_content = excel_file.read()
             file_content_b64 = base64.b64encode(file_content).decode('utf-8')
-            print(f"DEBUG: File content read and encoded, original size: {len(file_content)} bytes")
 
             # Store data in session
             request.session['upload_data'] = {
@@ -206,28 +220,24 @@ def data_upload_wizard(request, company_slug, project_slug):
                 'file_content_b64': file_content_b64  # Store as base64 string
             }
             request.session.modified = True
-            print(f"DEBUG: Session data stored successfully")
-            print(f"DEBUG: Session keys after storage: {list(request.session.keys())}")
-
-            print(f"DEBUG: About to redirect to process_sheets")
             return redirect('process_sheets', company_slug=company_slug, project_slug=project_slug)
 
         except Exception as e:
-            print(f"DEBUG: Exception occurred: {str(e)}")
-            print(f"DEBUG: Exception type: {type(e)}")
             import traceback
-            print(f"DEBUG: Full traceback: {traceback.format_exc()}")
             messages.error(request, f"Error reading excel file: {str(e)}")
             return render(request, 'impairment_engine/data_upload_wizard.html', {
                 'company_slug': company_slug,
                 'project_slug': project_slug,
+                'company': company,
+                'project': project,
                 'step': 1
             })
 
-    print(f"DEBUG: GET request - rendering step 1")
     return render(request, 'impairment_engine/data_upload_wizard.html', {
         'company_slug': company_slug,
         'project_slug': project_slug,
+        'company': company,  # Added this
+        'project': project,  # Added this
         'step': 1
     })
 
@@ -284,6 +294,18 @@ def process_sheet_selection(request, company_slug, project_slug):
 @login_required
 def process_column_mapping(request, company_slug, project_slug):
     print(f"DEBUG: process_column_mapping called")
+    ARREARS_BUCKETS = [
+        ('00-07 DAYS', '0_7_days', 0, 7),
+        ('08-14 DAYS', '8_14_days', 8, 14),
+        ('15-30 DAYS', '15_30_days', 15, 30),
+        ('31-60 DAYS', '31_60_days', 31, 60),
+        ('61-90 DAYS', '61_90_days', 61, 90),
+        ('91-120 DAYS', '91_120_days', 91, 120),
+        ('121-150 DAYS', '121_150_days', 121, 150),
+        ('151-180 DAYS', '151_180_days', 151, 180),
+        ('181-360 DAYS', '181_360_days', 181, 360),
+        ('OVER 360 DAYS', 'over_360_days', 361, 999999)
+    ]
 
     if 'upload_data' not in request.session or 'loan_sheet' not in request.session['upload_data']:
         print(f"DEBUG: Missing session data, redirecting to upload_wizard")
@@ -304,6 +326,21 @@ def process_column_mapping(request, company_slug, project_slug):
         print(f"DEBUG: Loan columns: {loan_columns}")
         print(f"DEBUG: Arrears columns: {arrears_columns}")
 
+        # Check if bucket columns are present in arrears data
+        bucket_columns_found = []
+        for bucket_name, _, _, _ in ARREARS_BUCKETS:
+            if bucket_name in arrears_columns:
+                bucket_columns_found.append(bucket_name)
+
+        bucket_columns_present = len(bucket_columns_found) > 0
+        request.session['upload_data']['has_bucket_columns'] = bucket_columns_present
+        request.session['upload_data']['bucket_columns_found'] = bucket_columns_found
+
+        print(f"DEBUG: Bucket columns found: {bucket_columns_found}")
+        print(f"DEBUG: Has bucket columns: {bucket_columns_present}")
+
+        request.session.modified = True
+
     except Exception as e:
         print(f"DEBUG: Error reading Excel sheets: {str(e)}")
         import traceback
@@ -321,20 +358,29 @@ def process_column_mapping(request, company_slug, project_slug):
         ('maturity_date', 'Maturity Date', True),
         ('currency', 'Currency', True),
         ('loan_amount', 'Loan Amount', True),
+        ('installment_amount', 'Installment Amount', True),
         ('capital_balance', 'Capital Balance', True),
         ('interest_rate', 'Interest Rate', True),
         ('loan_tenor', 'Loan Tenor (Days)', False),  # Can be computed
         ('days_to_maturity', 'Days to Maturity', False),  # Can be computed
     ]
 
-    arrears_field_config = [
-        ('account_number', 'Account Number', True),
-        ('currency', 'Currency', True),
-        ('capital_balance', 'Capital Balance', True),
-        ('arrears_amount', 'Arrears Amount', True),
-        ('exposure', 'Exposure Amount', False),  # Can be computed
-        ('days_past_due', 'Days Past Due', True),
-    ]
+    # Conditional arrears field config based on bucket presence
+    if bucket_columns_present:
+        arrears_field_config = [
+            ('account_number', 'Account Number', True),
+            ('currency', 'Currency', False),  # Optional since might come from loan sheet
+            ('capital_balance', 'Capital Balance', False),  # Optional since might come from loan sheet
+        ]
+    else:
+        arrears_field_config = [
+            ('account_number', 'Account Number', True),
+            ('currency', 'Currency', True),
+            ('capital_balance', 'Capital Balance', True),
+            ('arrears_amount', 'Arrears Amount', True),
+            ('exposure', 'Exposure Amount', False),  # Can be computed
+            ('days_past_due', 'Days Past Due', True),
+        ]
 
     if request.method == 'POST':
         print(f"DEBUG: Processing column mapping POST request")
@@ -370,58 +416,11 @@ def process_column_mapping(request, company_slug, project_slug):
         'arrears_columns': arrears_columns,
         'loan_field_config': loan_field_config,
         'arrears_field_config': arrears_field_config,
-        'step': 3
+        'step': 3,
+        'ARREARS_BUCKETS': ARREARS_BUCKETS,
+        'has_bucket_columns': bucket_columns_present,
+        'bucket_columns_found': bucket_columns_found,
     })
-
-
-@login_required
-def finalize_data_upload(request, company_slug, project_slug):
-    print(f"DEBUG: finalize_data_upload called")
-
-    if 'upload_data' not in request.session or 'mappings' not in request.session['upload_data']:
-        print(f"DEBUG: Missing session data for finalize")
-        messages.error(request, "Please complete all steps first")
-        return redirect('upload_wizard', company_slug=company_slug, project_slug=project_slug)
-
-    try:
-        project = Project.objects.get(pk=project_slug, company__slug=company_slug)
-        upload_data = request.session['upload_data']
-
-        # Decode the base64 file content
-        file_content_b64 = upload_data['file_content_b64']
-        file_content = base64.b64decode(file_content_b64.encode('utf-8'))
-        xls = pd.ExcelFile(BytesIO(file_content))
-
-        # Process loan data
-        loan_df = pd.read_excel(xls, sheet_name=upload_data['loan_sheet'])
-        loan_df = loan_df.rename(columns=upload_data['mappings']['loan_mappings'])
-
-        # Process arrears data
-        arrears_df = pd.read_excel(xls, sheet_name=upload_data['arrears_sheet'])
-        arrears_df = arrears_df.rename(columns=upload_data['mappings']['arrears_mappings'])
-
-        # Convert to dictionary format
-        project.loan_data = loan_df.to_dict(orient='records')
-        project.arrears_data = arrears_df.to_dict(orient='records')
-        project.loan_report_uploaded = True
-        project.arrears_report_uploaded = True
-        project.save()
-
-        print(f"DEBUG: Data saved successfully")
-
-        # Clear session data
-        if 'upload_data' in request.session:
-            del request.session['upload_data']
-
-        messages.success(request, "Data uploaded and processed successfully!")
-        return redirect('project_detail', company_slug=company_slug, project_slug=project_slug)
-
-    except Exception as e:
-        print(f"DEBUG: Error in finalize_data_upload: {str(e)}")
-        import traceback
-        print(f"DEBUG: Full traceback: {traceback.format_exc()}")
-        messages.error(request, f"Error processing data: {str(e)}")
-        return redirect('upload_wizard', company_slug=company_slug, project_slug=project_slug)
 
 
 @login_required
@@ -437,6 +436,13 @@ def finalize_data_upload_v2(request, company_slug, project_slug):
         company = Company.objects.get(slug=company_slug)
         upload_data = request.session['upload_data']
 
+        # Temporarily define rate for USD
+        rate = 13.7031
+
+        # Add this check at the start of finalize_data_upload_v2
+        print(
+            f"DEBUG: Company Stage Thresholds - Stage 1: {company.stage_1_threshold_days}, Stage 2: {company.stage_2_threshold_days}")
+
         # Decode the base64 file content
         file_content_b64 = upload_data['file_content_b64']
         file_content = base64.b64decode(file_content_b64.encode('utf-8'))
@@ -450,7 +456,7 @@ def finalize_data_upload_v2(request, company_slug, project_slug):
         loan_df = pd.read_excel(xls, sheet_name=upload_data['loan_sheet'])
         print(f"Loans columns currently {loan_df.columns}")
 
-        # FIXED: Invert the mapping to go from source_column -> target_column
+        # Invert the mapping to go from source_column -> target_column
         loan_mapping_inverted = {v: k for k, v in upload_data['mappings']['loan_mappings'].items()}
         print(f"DEBUG: Loan mapping inverted: {loan_mapping_inverted}")
         loan_df = loan_df.rename(columns=loan_mapping_inverted)
@@ -465,24 +471,8 @@ def finalize_data_upload_v2(request, company_slug, project_slug):
         arrears_df = pd.read_excel(xls, sheet_name=upload_data['arrears_sheet'])
         print(f"Arrears columns currently {arrears_df.columns}")
 
-        # FIXED: Invert the mapping to go from source_column -> target_column
-        arrears_mapping_inverted = {v: k for k, v in upload_data['mappings']['arrears_mappings'].items()}
-        print(f"DEBUG: Arrears mapping inverted: {arrears_mapping_inverted}")
-        arrears_df = arrears_df.rename(columns=arrears_mapping_inverted)
-
-        # Keep only mapped columns for arrears data
-        arrears_mapped_columns = list(arrears_mapping_inverted.values())
-        arrears_df = arrears_df[arrears_mapped_columns]
-        print(f"Arrears columns after filtering: {arrears_df.columns}")
-
-        # Verify the account_number column exists before merging
-        print(f"DEBUG: 'account_number' in loan_df: {'account_number' in loan_df.columns}")
-        print(f"DEBUG: 'account_number' in arrears_df: {'account_number' in arrears_df.columns}")
-
-        """
-        Special implementation specifically for template shared
-        """
-        arrears_buckets = [
+        # Define arrears buckets at module level for consistency
+        ARREARS_BUCKETS = [
             ('00-07 DAYS', '0_7_days', 0, 7),
             ('08-14 DAYS', '8_14_days', 8, 14),
             ('15-30 DAYS', '15_30_days', 15, 30),
@@ -495,23 +485,20 @@ def finalize_data_upload_v2(request, company_slug, project_slug):
             ('OVER 360 DAYS', 'over_360_days', 361, 999999)
         ]
 
-        # Always process bucket-based arrears if bucket columns are present
-        # Check if we need to process bucket columns (they exist in the dataframe)
-        bucket_columns_present = any(bucket_name in arrears_df.columns for bucket_name, _, _, _ in arrears_buckets)
-
-        if bucket_columns_present:
+        # Process bucket-based arrears if bucket columns are present
+        if upload_data.get('has_bucket_columns', False):
             print(f"DEBUG: Processing bucket-based arrears data")
 
-            # Initialize or reset arrears_amount and days_past_due columns
+            # Initialize arrears columns
             arrears_df['arrears_amount'] = 0.0
             arrears_df['days_past_due'] = 0
 
             # Process each row to find which bucket has the arrears amount
             for idx, row in arrears_df.iterrows():
                 total_arrears = 0.0
-                max_dpd = 0  # Use the highest DPD bucket that has arrears
+                max_dpd = 0  # Track the highest DPD bucket with arrears
 
-                for bucket_name, field_name, min_days, max_days in arrears_buckets:
+                for bucket_name, field_name, min_days, max_days in ARREARS_BUCKETS:
                     bucket_value = 0.0
 
                     # Check if this exact bucket column exists and has a value
@@ -530,33 +517,55 @@ def finalize_data_upload_v2(request, company_slug, project_slug):
                             except (ValueError, TypeError):
                                 bucket_value = 0.0
 
-                    if bucket_value > 0:
-                        total_arrears += bucket_value
-                        # Use the midpoint of the range for DPD calculation
-                        if max_days == 999999:  # Over 360 days
-                            max_dpd = max(max_dpd, 365)  # Use 365 as representative
-                        else:
-                            max_dpd = max(max_dpd, (min_days + max_days) // 2)
+                        if bucket_value > 0:
+                            total_arrears += (bucket_value / rate) # Divide by the rate for accurate USD Reporting
+                            # Set DPD to the MAXIMUM days in the bucket (this was the bug!)
+                            # For staging purposes, we want to use max_days to be conservative
+                            max_dpd = max(max_dpd, max_days)
 
-                arrears_df.at[idx, 'arrears_amount'] = total_arrears
+                arrears_df.at[idx, 'arrears_amount'] = round(total_arrears, 2)
                 arrears_df.at[idx, 'days_past_due'] = max_dpd
 
-            accounts_with_arrears = len(arrears_df[arrears_df['arrears_amount'] > 0])
-            print(f"DEBUG: Processed {accounts_with_arrears} accounts with arrears from bucket format")
-            print(f"DEBUG: Sample arrears data:")
-            sample_arrears = arrears_df[arrears_df['arrears_amount'] > 0].head(3)
-            for _, row in sample_arrears.iterrows():
-                print(
-                    f"  Account: {row.get('account_number', 'N/A')}, Arrears: {row['arrears_amount']}, DPD: {row['days_past_due']}")
+                # Debug print for the specific account
+                if row.get('account_number') == 'LD2308905320':  # Your example account
+                    print(
+                        f"DEBUG: Account {row.get('account_number')} - Total arrears: {total_arrears}, Max DPD: {max_dpd}")
+
+            print(
+                f"DEBUG: Processed {len(arrears_df[arrears_df['arrears_amount'] > 0])} accounts with arrears from bucket format")
+
+            # Invert the mapping for arrears (only for account_number and other mapped fields)
+            arrears_mapping_inverted = {v: k for k, v in upload_data['mappings']['arrears_mappings'].items()}
+            print(f"DEBUG: Arrears mapping inverted: {arrears_mapping_inverted}")
+
+            # Rename only the mapped columns
+            arrears_df = arrears_df.rename(columns=arrears_mapping_inverted)
+
+            # Keep mapped columns plus our computed ones
+            arrears_mapped_columns = list(arrears_mapping_inverted.values()) + ['arrears_amount', 'days_past_due']
+            # Filter to only columns that exist
+            arrears_mapped_columns = [col for col in arrears_mapped_columns if col in arrears_df.columns]
+            arrears_df = arrears_df[arrears_mapped_columns]
 
         else:
-            print(f"DEBUG: No bucket columns found, using existing arrears_amount and days_past_due columns")
+            # Traditional processing for non-bucket data
+            print(f"DEBUG: Processing traditional arrears data")
+            arrears_mapping_inverted = {v: k for k, v in upload_data['mappings']['arrears_mappings'].items()}
+            print(f"DEBUG: Arrears mapping inverted: {arrears_mapping_inverted}")
+            arrears_df = arrears_df.rename(columns=arrears_mapping_inverted)
+
+            # Keep only mapped columns for arrears data
+            arrears_mapped_columns = list(arrears_mapping_inverted.values())
+            arrears_df = arrears_df[arrears_mapped_columns]
+
+        print(f"Arrears columns after filtering: {arrears_df.columns}")
+
+        # Verify the account_number column exists before merging
+        print(f"DEBUG: 'account_number' in loan_df: {'account_number' in loan_df.columns}")
+        print(f"DEBUG: 'account_number' in arrears_df: {'account_number' in arrears_df.columns}")
 
         # Merge loan and arrears data on account_number
         print(f"DEBUG: Merging loan and arrears data")
-        print(f"Loan columns: {loan_df.columns.tolist()}")
-        print(f"Arrears columns: {arrears_df.columns.tolist()}")
-
         merged_df = loan_df.merge(
             arrears_df,
             on='account_number',
@@ -596,37 +605,39 @@ def finalize_data_upload_v2(request, company_slug, project_slug):
         if 'maturity_date' in merged_df.columns:
             today = pd.Timestamp.now().normalize()
             days_to_maturity = (merged_df['maturity_date'] - today).dt.days
-            merged_df['days_to_maturity'] = days_to_maturity.where(days_to_maturity >= 0, 0)  # Set negative values to 0
+            merged_df['days_to_maturity'] = days_to_maturity.where(days_to_maturity >= 0, 0)
 
-        # Add loan stage based on days past due
+        # Add loan stage based on days past due - FIXED LOGIC
         def get_loan_stage(dpd):
+            print(f"DEBUG: Calculating stage for DPD: {dpd} (type: {type(dpd)})")
             if pd.isna(dpd) or dpd == 0:
-                return 'stage_1'
+                return '' # Leave Loan Stage null for loans not in arrears
             elif dpd <= company.stage_1_threshold_days:
-                return 'stage_1'  # typically 30 days and below
+                return 'stage_1'
             elif dpd <= company.stage_2_threshold_days:
-                return 'stage_2'  # typically 90 days and below
+                return 'stage_2'
             else:
-                return 'stage_3'  # above 90 days (Defaulted)
+                return 'stage_3'
 
         merged_df['loan_stage'] = merged_df['days_past_due'].apply(get_loan_stage)
 
-        # Define the expected final columns based on your field configurations
+        # Debug: Print some examples
+        print(f"DEBUG: Sample DPD and stages:")
+        for idx, row in merged_df.head(10).iterrows():
+            print(
+                f"  Account: {row.get('account_number', 'N/A')}, DPD: {row['days_past_due']}, Stage: {row['loan_stage']}")
+
+        # Define the expected final columns
         expected_columns = [
-            # Core loan fields
             'account_number', 'branch', 'client_name', 'loan_type', 'opening_date',
             'maturity_date', 'currency', 'loan_amount', 'capital_balance', 'interest_rate',
-            # Arrears fields
-            'arrears_amount', 'days_past_due',
-            # Computed fields
-            'exposure', 'loan_tenor', 'days_to_maturity', 'loan_stage'
+            'arrears_amount', 'days_past_due', 'exposure', 'loan_tenor',
+            'days_to_maturity', 'loan_stage'
         ]
 
         # Filter to only keep expected columns that exist in the dataframe
         final_columns = [col for col in expected_columns if col in merged_df.columns]
         merged_df = merged_df[final_columns]
-
-        print(f"DEBUG: Final columns in merged_df: {merged_df.columns.tolist()}")
 
         # Ensure all columns are JSON serializable
         for col in merged_df.columns:
@@ -646,7 +657,6 @@ def finalize_data_upload_v2(request, company_slug, project_slug):
         project.loan_report_uploaded = True
         project.arrears_report_uploaded = True
 
-
         # Add metadata about the upload
         project.upload_metadata = {
             'total_accounts': len(loan_data),
@@ -655,22 +665,17 @@ def finalize_data_upload_v2(request, company_slug, project_slug):
             'upload_date': pd.Timestamp.now().isoformat(),
             'total_exposure': float(merged_df['exposure'].sum()),
             'total_arrears': float(merged_df['arrears_amount'].sum()),
-            'status_breakdown': merged_df['loan_stage'].value_counts().to_dict()
+            'status_breakdown': merged_df['loan_stage'].value_counts().to_dict(),
+            'processing_type': 'bucket_based' if upload_data.get('has_bucket_columns', False) else 'traditional'
         }
 
         project.save()
-
-        print(f"DEBUG: Merged data saved successfully")
-        print(f"DEBUG: Total accounts: {len(loan_data)}")
-        print(f"DEBUG: Accounts with arrears: {len(merged_df[merged_df['days_past_due'] > 0])}")
 
         # Clear session data
         if 'upload_data' in request.session:
             del request.session['upload_data']
 
         messages.success(request, f"Data uploaded successfully! Processed {len(loan_data)} loan accounts.")
-
-        # Fix the redirect - use the correct URL name
         return redirect('project_dashboard', company_slug=company_slug, project_slug=project_slug)
 
     except Exception as e:
