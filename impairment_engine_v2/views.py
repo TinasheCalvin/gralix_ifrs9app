@@ -144,7 +144,7 @@ def create_project(request, company_slug):
 
 
 @login_required
-def project_detail(request, company_slug, project_slug):
+def dashboard(request, company_slug, project_slug):
     """Project detail view showing status and progress"""
     company = get_object_or_404(Company, slug=company_slug)
     project = get_object_or_404(Project, slug=project_slug, company=company)
@@ -154,20 +154,12 @@ def project_detail(request, company_slug, project_slug):
         messages.error(request, "You don't have permission to access this project.")
         return redirect('home')
 
-    # Get project statistics
-    recent_uploads = project.data_uploads.all().order_by('-uploaded_at')[:5]
-    cbl_parameters = project.cbl_parameters.all().order_by('loan_type', 'currency')
-
     context = {
         'company': company,
-        'project': project,
-        'recent_uploads': recent_uploads,
-        'cbl_parameters': cbl_parameters,
-        'total_uploads': project.data_uploads.count(),
-        'total_parameters': cbl_parameters.count(),
+        'project': project
     }
 
-    return render(request, 'impairment/project_detail.html', context)
+    return render(request, 'impairment_engine/project_dashboard.html', context)
 
 
 @login_required
@@ -1016,7 +1008,7 @@ def upload_data(request, company_slug, project_slug):
             project.save()
 
             messages.success(request, f"{data_upload.get_upload_type_display()} uploaded successfully!")
-            return HttpResponseRedirect(reverse('project_detail', args=[company_slug, project_slug]))
+            return HttpResponseRedirect(reverse('dashboard', args=[company_slug, project_slug]))
     else:
         form = DataUploadForm()
 

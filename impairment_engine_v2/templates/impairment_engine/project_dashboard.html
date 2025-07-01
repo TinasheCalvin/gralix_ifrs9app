@@ -159,9 +159,7 @@
                 <h6>SUMMARY BY LOAN TYPE</h6>
                 <p class="text-sm mb-0">
                   <i class="fa fa-check text-info" aria-hidden="true"></i>
-                  {% if ECL is not None %}
-                  <span class="font-weight-bold ms-1">{{ unique_loan_types|length }} Unique Loan Segments Identified</span>
-                  {% endif %}
+                  <span class="font-weight-bold ms-1">11 Unique Loan Segments Identified</span>
                 </p>
               </div>
               <div class="col-lg-6 col-5 my-auto text-end">
@@ -181,42 +179,39 @@
           <div class="card-body px-0 pb-2">
             <div class="table-responsive">
               <table class="table align-items-center mb-0">
-                <thead>
+                <thead class="bg-light">
                   <tr>
-                    <th class="text-uppercase text-secondary text-xs font-weight-bolder opacity-7">Loan Type</th>
-                    <th class="text-center text-uppercase text-secondary text-xs font-weight-bolder opacity-7">Total Expected Credit Loss</th>
-                    <th class="text-center text-uppercase text-secondary text-xs font-weight-bolder opacity-7">Total Exposure</th>
-                    <th class="text-center text-uppercase text-secondary text-xs font-weight-bolder opacity-7">Proportion of Total Exposure</th>
-                    <th class="text-center text-uppercase text-secondary text-xs font-weight-bolder opacity-7">Coverage Ratio</th>
+                    <th class="text-uppercase text-secondary text-xs font-weight-semibold opacity-7 ps-3">Loan Type</th>
+                    <th class="text-uppercase text-secondary text-xs font-weight-semibold opacity-7 ps-3">Total Expected Credit Loss</th>
+                    <th class="text-uppercase text-secondary text-xs font-weight-semibold opacity-7 ps-3">Total Exposure</th>
+                    <th class="text-uppercase text-secondary text-xs font-weight-semibold opacity-7 ps-3">Proportion of Total Exposure</th>
+                    <th class="text-uppercase text-secondary text-xs font-weight-semibold opacity-7 ps-3">Coverage Ratio</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {% if ecl_summary is not None %}
-                  {% for loan_type, values in ecl_summary.items %}
                   <tr>
                     <td>
                       <div class="d-flex px-2 py-1">
-
                         <div class="d-flex flex-column justify-content-center">
-                          <span class="text-xs font-weight-bold">{{ loan_type }}</span>
+                          <span class="text-xs font-weight-bold">SSB Loans</span>
                         </div>
                       </div>
                     </td>
                     <td class="align-middle text-center text-sm">
-                      <span class="text-xs font-weight-bold">{{ values.0|floatformat:0|intcomma }}</span>
+                      <span class="text-xs font-weight-bold">21,888,794</span>
                     </td>
                     <td class="align-middle text-center text-sm">
-                      <span class="text-xs font-weight-bold">{{ values.1|floatformat:0|intcomma }}</span>
+                      <span class="text-xs font-weight-bold">699,104,111</span>
                     </td>
                     <td class="align-middle">
                       <div class="progress-wrapper w-75 mx-auto">
                         <div class="progress-info">
                           <div class="progress-percentage">
-                            <span class="text-xs font-weight-bold">{{ values.2|floatformat:2 }}%</span>
+                            <span class="text-xs font-weight-bold">69.41%</span>
                           </div>
                         </div>
                         <div class="progress" style="height:5px">
-                          <div class="progress-bar bg-gradient-info" role="progressbar" style="height:5px;width:{{ values.2 }}%;" aria-valuenow="60" aria-valuemin="0" aria-valuemax="100"></div>
+                          <div class="progress-bar bg-gradient-info" role="progressbar" style="height:5px;width:69.41%;" aria-valuenow="69.41" aria-valuemin="0" aria-valuemax="100"></div>
                         </div>
                       </div>
                     </td>
@@ -224,17 +219,288 @@
                       <div class="progress-wrapper w-75 mx-auto">
                         <div class="progress-info">
                           <div class="progress-percentage">
-                            <span class="text-xs font-weight-bold">{{ values.3|floatformat:2 }}%</span>
+                            <span class="text-xs font-weight-bold">3.13%</span>
                           </div>
                         </div>
                         <div class="progress" style="height:5px">
-                          <div class="progress-bar bg-gradient-info" role="progressbar" style="height:5px;width:{{ values.3 }}%;" aria-valuenow="60" aria-valuemin="0" aria-valuemax="100"></div>
+                          <div class="progress-bar bg-gradient-info" role="progressbar" style="height:5px;width:6%;" aria-valuenow="6" aria-valuemin="0" aria-valuemax="100"></div>
                         </div>
                       </div>
                     </td>
                   </tr>
-                  {% endfor %}
-                  {% endif %}
+                <tr>
+                    <td>
+                      <div class="d-flex px-2 py-1">
+                        <div class="d-flex flex-column justify-content-center">
+                          <span class="text-xs font-weight-bold">SSB Loans</span>
+                        </div>
+                      </div>
+                    </td>
+                    <td class="align-middle text-center text-sm">
+                      <span class="text-xs font-weight-bold">21,888,794</span>
+                    </td>
+                    <td class="align-middle text-center text-sm">
+                      <span class="text-xs font-weight-bold">699,104,111</span>
+                    </td>
+                    <td class="align-middle">
+                      <div class="progress-wrapper w-75 mx-auto">
+                        <div class="progress-info">
+                          <div class="progress-percentage">
+                            <span class="text-xs font-weight-bold">69.41%</span>
+                          </div>
+                        </div>
+                        <div class="progress" style="height:5px">
+                          <div class="progress-bar bg-gradient-info" role="progressbar" style="height:5px;width:69.41%;" aria-valuenow="69.41" aria-valuemin="0" aria-valuemax="100"></div>
+                        </div>
+                      </div>
+                    </td>
+                    <td class="align-middle">
+                      <div class="progress-wrapper w-75 mx-auto">
+                        <div class="progress-info">
+                          <div class="progress-percentage">
+                            <span class="text-xs font-weight-bold">3.13%</span>
+                          </div>
+                        </div>
+                        <div class="progress" style="height:5px">
+                          <div class="progress-bar bg-gradient-info" role="progressbar" style="height:5px;width:6%;" aria-valuenow="6" aria-valuemin="0" aria-valuemax="100"></div>
+                        </div>
+                      </div>
+                    </td>
+                  </tr>
+                <tr>
+                    <td>
+                      <div class="d-flex px-2 py-1">
+                        <div class="d-flex flex-column justify-content-center">
+                          <span class="text-xs font-weight-bold">SSB Loans</span>
+                        </div>
+                      </div>
+                    </td>
+                    <td class="align-middle text-center text-sm">
+                      <span class="text-xs font-weight-bold">21,888,794</span>
+                    </td>
+                    <td class="align-middle text-center text-sm">
+                      <span class="text-xs font-weight-bold">699,104,111</span>
+                    </td>
+                    <td class="align-middle">
+                      <div class="progress-wrapper w-75 mx-auto">
+                        <div class="progress-info">
+                          <div class="progress-percentage">
+                            <span class="text-xs font-weight-bold">69.41%</span>
+                          </div>
+                        </div>
+                        <div class="progress" style="height:5px">
+                          <div class="progress-bar bg-gradient-info" role="progressbar" style="height:5px;width:69.41%;" aria-valuenow="69.41" aria-valuemin="0" aria-valuemax="100"></div>
+                        </div>
+                      </div>
+                    </td>
+                    <td class="align-middle">
+                      <div class="progress-wrapper w-75 mx-auto">
+                        <div class="progress-info">
+                          <div class="progress-percentage">
+                            <span class="text-xs font-weight-bold">3.13%</span>
+                          </div>
+                        </div>
+                        <div class="progress" style="height:5px">
+                          <div class="progress-bar bg-gradient-info" role="progressbar" style="height:5px;width:6%;" aria-valuenow="6" aria-valuemin="0" aria-valuemax="100"></div>
+                        </div>
+                      </div>
+                    </td>
+                  </tr>
+                <tr>
+                    <td>
+                      <div class="d-flex px-2 py-1">
+                        <div class="d-flex flex-column justify-content-center">
+                          <span class="text-xs font-weight-bold">SSB Loans</span>
+                        </div>
+                      </div>
+                    </td>
+                    <td class="align-middle text-center text-sm">
+                      <span class="text-xs font-weight-bold">21,888,794</span>
+                    </td>
+                    <td class="align-middle text-center text-sm">
+                      <span class="text-xs font-weight-bold">699,104,111</span>
+                    </td>
+                    <td class="align-middle">
+                      <div class="progress-wrapper w-75 mx-auto">
+                        <div class="progress-info">
+                          <div class="progress-percentage">
+                            <span class="text-xs font-weight-bold">69.41%</span>
+                          </div>
+                        </div>
+                        <div class="progress" style="height:5px">
+                          <div class="progress-bar bg-gradient-info" role="progressbar" style="height:5px;width:69.41%;" aria-valuenow="69.41" aria-valuemin="0" aria-valuemax="100"></div>
+                        </div>
+                      </div>
+                    </td>
+                    <td class="align-middle">
+                      <div class="progress-wrapper w-75 mx-auto">
+                        <div class="progress-info">
+                          <div class="progress-percentage">
+                            <span class="text-xs font-weight-bold">3.13%</span>
+                          </div>
+                        </div>
+                        <div class="progress" style="height:5px">
+                          <div class="progress-bar bg-gradient-info" role="progressbar" style="height:5px;width:6%;" aria-valuenow="6" aria-valuemin="0" aria-valuemax="100"></div>
+                        </div>
+                      </div>
+                    </td>
+                  </tr>
+                <tr>
+                    <td>
+                      <div class="d-flex px-2 py-1">
+                        <div class="d-flex flex-column justify-content-center">
+                          <span class="text-xs font-weight-bold">SSB Loans</span>
+                        </div>
+                      </div>
+                    </td>
+                    <td class="align-middle text-center text-sm">
+                      <span class="text-xs font-weight-bold">21,888,794</span>
+                    </td>
+                    <td class="align-middle text-center text-sm">
+                      <span class="text-xs font-weight-bold">699,104,111</span>
+                    </td>
+                    <td class="align-middle">
+                      <div class="progress-wrapper w-75 mx-auto">
+                        <div class="progress-info">
+                          <div class="progress-percentage">
+                            <span class="text-xs font-weight-bold">69.41%</span>
+                          </div>
+                        </div>
+                        <div class="progress" style="height:5px">
+                          <div class="progress-bar bg-gradient-info" role="progressbar" style="height:5px;width:69.41%;" aria-valuenow="69.41" aria-valuemin="0" aria-valuemax="100"></div>
+                        </div>
+                      </div>
+                    </td>
+                    <td class="align-middle">
+                      <div class="progress-wrapper w-75 mx-auto">
+                        <div class="progress-info">
+                          <div class="progress-percentage">
+                            <span class="text-xs font-weight-bold">3.13%</span>
+                          </div>
+                        </div>
+                        <div class="progress" style="height:5px">
+                          <div class="progress-bar bg-gradient-info" role="progressbar" style="height:5px;width:6%;" aria-valuenow="6" aria-valuemin="0" aria-valuemax="100"></div>
+                        </div>
+                      </div>
+                    </td>
+                  </tr>
+                <tr>
+                    <td>
+                      <div class="d-flex px-2 py-1">
+                        <div class="d-flex flex-column justify-content-center">
+                          <span class="text-xs font-weight-bold">SSB Loans</span>
+                        </div>
+                      </div>
+                    </td>
+                    <td class="align-middle text-center text-sm">
+                      <span class="text-xs font-weight-bold">21,888,794</span>
+                    </td>
+                    <td class="align-middle text-center text-sm">
+                      <span class="text-xs font-weight-bold">699,104,111</span>
+                    </td>
+                    <td class="align-middle">
+                      <div class="progress-wrapper w-75 mx-auto">
+                        <div class="progress-info">
+                          <div class="progress-percentage">
+                            <span class="text-xs font-weight-bold">69.41%</span>
+                          </div>
+                        </div>
+                        <div class="progress" style="height:5px">
+                          <div class="progress-bar bg-gradient-info" role="progressbar" style="height:5px;width:69.41%;" aria-valuenow="69.41" aria-valuemin="0" aria-valuemax="100"></div>
+                        </div>
+                      </div>
+                    </td>
+                    <td class="align-middle">
+                      <div class="progress-wrapper w-75 mx-auto">
+                        <div class="progress-info">
+                          <div class="progress-percentage">
+                            <span class="text-xs font-weight-bold">3.13%</span>
+                          </div>
+                        </div>
+                        <div class="progress" style="height:5px">
+                          <div class="progress-bar bg-gradient-info" role="progressbar" style="height:5px;width:6%;" aria-valuenow="6" aria-valuemin="0" aria-valuemax="100"></div>
+                        </div>
+                      </div>
+                    </td>
+                  </tr>
+                <tr>
+                    <td>
+                      <div class="d-flex px-2 py-1">
+                        <div class="d-flex flex-column justify-content-center">
+                          <span class="text-xs font-weight-bold">SSB Loans</span>
+                        </div>
+                      </div>
+                    </td>
+                    <td class="align-middle text-center text-sm">
+                      <span class="text-xs font-weight-bold">21,888,794</span>
+                    </td>
+                    <td class="align-middle text-center text-sm">
+                      <span class="text-xs font-weight-bold">699,104,111</span>
+                    </td>
+                    <td class="align-middle">
+                      <div class="progress-wrapper w-75 mx-auto">
+                        <div class="progress-info">
+                          <div class="progress-percentage">
+                            <span class="text-xs font-weight-bold">69.41%</span>
+                          </div>
+                        </div>
+                        <div class="progress" style="height:5px">
+                          <div class="progress-bar bg-gradient-info" role="progressbar" style="height:5px;width:69.41%;" aria-valuenow="69.41" aria-valuemin="0" aria-valuemax="100"></div>
+                        </div>
+                      </div>
+                    </td>
+                    <td class="align-middle">
+                      <div class="progress-wrapper w-75 mx-auto">
+                        <div class="progress-info">
+                          <div class="progress-percentage">
+                            <span class="text-xs font-weight-bold">3.13%</span>
+                          </div>
+                        </div>
+                        <div class="progress" style="height:5px">
+                          <div class="progress-bar bg-gradient-info" role="progressbar" style="height:5px;width:6%;" aria-valuenow="6" aria-valuemin="0" aria-valuemax="100"></div>
+                        </div>
+                      </div>
+                    </td>
+                  </tr>
+                <tr>
+                    <td>
+                      <div class="d-flex px-2 py-1">
+                        <div class="d-flex flex-column justify-content-center">
+                          <span class="text-xs font-weight-bold">SSB Loans</span>
+                        </div>
+                      </div>
+                    </td>
+                    <td class="align-middle text-center text-sm">
+                      <span class="text-xs font-weight-bold">21,888,794</span>
+                    </td>
+                    <td class="align-middle text-center text-sm">
+                      <span class="text-xs font-weight-bold">699,104,111</span>
+                    </td>
+                    <td class="align-middle">
+                      <div class="progress-wrapper w-75 mx-auto">
+                        <div class="progress-info">
+                          <div class="progress-percentage">
+                            <span class="text-xs font-weight-bold">69.41%</span>
+                          </div>
+                        </div>
+                        <div class="progress" style="height:5px">
+                          <div class="progress-bar bg-gradient-info" role="progressbar" style="height:5px;width:69.41%;" aria-valuenow="69.41" aria-valuemin="0" aria-valuemax="100"></div>
+                        </div>
+                      </div>
+                    </td>
+                    <td class="align-middle">
+                      <div class="progress-wrapper w-75 mx-auto">
+                        <div class="progress-info">
+                          <div class="progress-percentage">
+                            <span class="text-xs font-weight-bold">3.13%</span>
+                          </div>
+                        </div>
+                        <div class="progress" style="height:5px">
+                          <div class="progress-bar bg-gradient-info" role="progressbar" style="height:5px;width:6%;" aria-valuenow="6" aria-valuemin="0" aria-valuemax="100"></div>
+                        </div>
+                      </div>
+                    </td>
+                  </tr>
                 </tbody>
               </table>
             </div>

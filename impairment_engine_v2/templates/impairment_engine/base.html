@@ -79,7 +79,7 @@
           </li>
           <li class="nav-item">
             {% with request.resolver_match.url_name as url_name %}
-            <a class="nav-link text-white {% if url_name == 'dashboard' %} active bg-gradient-secondary{% endif %}" href="{% url 'upload_wizard' company.slug project.slug %}">
+            <a class="nav-link text-white {% if url_name == 'project_dashboard' %} active bg-gradient-secondary{% endif %}" href="{% url 'project_dashboard' company.slug project.slug %}">
               
               <span class="nav-link-text ms-1">Dashboard</span>
             </a>
@@ -87,7 +87,7 @@
           </li>
           <li class="nav-item">
             {% with request.resolver_match.url_name as url_name %}
-            <a class="nav-link text-white {% if 'current' in url_name %}active bg-gradient-secondary{% endif %}" href="#">
+            <a class="nav-link text-white {% if url_name == 'current_loan_book' %}active bg-gradient-secondary{% endif %}" href="{% url 'current_loan_book' company_slug=company.slug project_slug=project.slug stage='stage_1' %}">
             
               <span class="nav-link-text ms-1">Current Loan Book</span>
             </a>
