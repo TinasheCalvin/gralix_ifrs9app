@@ -10,5 +10,6 @@ urlpatterns = [
     path('company/<slug:company_slug>/projects/<slug:project_slug>/upload/sheets/', views.process_sheet_selection, name='process_sheets'),
     path('company/<slug:company_slug>/projects/<slug:project_slug>/upload/mapping/', views.process_column_mapping, name='process_mapping'),
     path('company/<slug:company_slug>/projects/<slug:project_slug>/upload/finalize/', views.finalize_data_upload_v2, name='finalize_upload'),
+    path('company/<slug:company_slug>/projects/<slug:project_slug>/loanbook/<slug:stage>', views.current_loanbook, name='current_loan_book'),
 ]
 

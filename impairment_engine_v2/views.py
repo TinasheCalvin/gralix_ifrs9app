@@ -4,6 +4,7 @@ import io
 from io import BytesIO
 import pandas as pd
 import numpy as np
+import random
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
@@ -11,6 +12,7 @@ from django.core.paginator import Paginator
 from django.db import transaction
 from django.http import HttpResponseRedirect
 from django.shortcuts import render, get_object_or_404, redirect
+from django.template.defaultfilters import title
 from django.urls import reverse
 from django.views.decorators.http import require_http_methods
 
@@ -134,7 +136,7 @@ def create_project(request, company_slug):
             project.created_by = request.user
             project.save()
             messages.success(request, "Project Created Successfully!")
-            return HttpResponseRedirect(reverse('company_projects', args=[company_slug]))
+            return HttpResponseRedirect(reverse('upload_wizard', args=[company_slug, project.slug]))
     else:
         form = ProjectForm()
 
@@ -177,12 +179,12 @@ def data_upload_wizard(request, company_slug, project_slug):
     # Check permissions
     if not request.user.is_superuser and company.created_by != request.user:
         messages.error(request, "You don't have permission to view this project dashboard.")
-        return redirect('home')
+        return redirect('index')
 
     # Check if data upload not already processed
     if project.loan_report_uploaded and project.arrears_report_uploaded and project.status != "":
         messages.error(request, "Project data has already been uploaded. Navigating to project dashboard.")
-        return redirect('index')
+        return redirect('current_loan_book', company_slug=company_slug, project_slug=project_slug, stage='stage_1')
 
     if request.method == 'POST':
         excel_file = request.FILES.get('excel_file')
@@ -304,7 +306,7 @@ def process_column_mapping(request, company_slug, project_slug):
         ('121-150 DAYS', '121_150_days', 121, 150),
         ('151-180 DAYS', '151_180_days', 151, 180),
         ('181-360 DAYS', '181_360_days', 181, 360),
-        ('OVER 360 DAYS', 'over_360_days', 361, 999999)
+        ('OVER 360 DAYS', 'over_360_days', 361, 365)
     ]
 
     if 'upload_data' not in request.session or 'loan_sheet' not in request.session['upload_data']:
@@ -429,7 +431,7 @@ def finalize_data_upload_v2(request, company_slug, project_slug):
     if 'upload_data' not in request.session or 'mappings' not in request.session['upload_data']:
         print(f"DEBUG: Missing session data for finalize")
         messages.error(request, "Please complete all steps first")
-        return redirect('upload_wizard', company_slug=company_slug, project_slug=project_slug)
+        return redirect('current_loan_book', company_slug=company_slug, project_slug=project_slug, stage='stage_1')
 
     try:
         project = Project.objects.get(slug=project_slug, company__slug=company_slug)
@@ -482,7 +484,7 @@ def finalize_data_upload_v2(request, company_slug, project_slug):
             ('121-150 DAYS', '121_150_days', 121, 150),
             ('151-180 DAYS', '151_180_days', 151, 180),
             ('181-360 DAYS', '181_360_days', 181, 360),
-            ('OVER 360 DAYS', 'over_360_days', 361, 999999)
+            ('OVER 360 DAYS', 'over_360_days', 361, 365)
         ]
 
         # Process bucket-based arrears if bucket columns are present
@@ -519,9 +521,9 @@ def finalize_data_upload_v2(request, company_slug, project_slug):
 
                         if bucket_value > 0:
                             total_arrears += (bucket_value / rate) # Divide by the rate for accurate USD Reporting
-                            # Set DPD to the MAXIMUM days in the bucket (this was the bug!)
-                            # For staging purposes, we want to use max_days to be conservative
-                            max_dpd = max(max_dpd, max_days)
+                            # Temporarily set max_dpd to a random number
+                            # max_dpd = max(max_dpd, max_days)
+                            max_dpd = random.randint(max_days, max_days + 1)
 
                 arrears_df.at[idx, 'arrears_amount'] = round(total_arrears, 2)
                 arrears_df.at[idx, 'days_past_due'] = max_dpd
@@ -611,7 +613,7 @@ def finalize_data_upload_v2(request, company_slug, project_slug):
         def get_loan_stage(dpd):
             print(f"DEBUG: Calculating stage for DPD: {dpd} (type: {type(dpd)})")
             if pd.isna(dpd) or dpd == 0:
-                return '' # Leave Loan Stage null for loans not in arrears
+                return 'stage_1' # Current Performing Loans fall under stage 1
             elif dpd <= company.stage_1_threshold_days:
                 return 'stage_1'
             elif dpd <= company.stage_2_threshold_days:
@@ -685,6 +687,50 @@ def finalize_data_upload_v2(request, company_slug, project_slug):
         messages.error(request, f"Error processing data: {str(e)}")
         return redirect('upload_wizard', company_slug=company_slug, project_slug=project_slug)
 
+
+@login_required
+def current_loanbook(request, company_slug, project_slug, stage):
+    company = get_object_or_404(Company, slug=company_slug)
+    project = get_object_or_404(Project, slug=project_slug, company=company)
+
+    data = pd.DataFrame(project.loan_data)
+    filtered_loans  = data[data['loan_stage'] == stage]
+    loans_list = filtered_loans.to_dict(orient='records')
+
+    paginator = Paginator(loans_list, 20)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+
+    # Define columns to render
+    columns = [
+        'account_number',
+        'client_name',
+        'loan_type',
+        'currency',
+        'loan_amount',
+        'loan_tenor',
+        'opening_date',
+        'maturity_date',
+        'days_past_due'
+    ]
+    
+    staging_title = ''
+    if stage == 'stage_1':
+        staging_title = 'Stage 1 Loans - Performing'
+    elif stage == 'stage_2':
+        staging_title = 'Stage 2 Loans - Significant Increase in Credit Risk'
+    elif stage == 'stage_3':
+        staging_title = 'Stage 3 Loans - Non-Performing (Defaulted)'
+
+    context = {
+        'company': company,
+        'project': project,
+        'columns': columns,
+        'page_obj': page_obj,
+        'staging': staging_title
+    }
+
+    return render(request, 'impairment_engine/current_loanbook.html', context)
 
 @login_required
 def manage_branch_mappings(request, company_slug):

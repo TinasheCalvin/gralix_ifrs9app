@@ -59,7 +59,7 @@
                     </div>
                   </td>
                   <td>
-                    <span class="text-xs font-weight-bold">{{ project.total_loans }}</span>
+                    <span class="text-xs font-weight-bold">{{ project.upload_metadata.total_accounts }}</span>
                   </td>
                   <td>
                     <span class="text-xs font-weight-bold">{{ project.created_at|date:"d M Y" }}</span>
@@ -68,16 +68,12 @@
                     <span class="text-xs font-weight-bold">{{ project.created_by }}</span>
                   </td>
                   <td class="align-middle">
-                    {% if project.is_active %}
-                      <span class="badge badge-sm bg-gradient-success">Active</span>
-                    {% else %}
-                      <span class="badge badge-sm bg-gradient-secondary">Inactive</span>
-                    {% endif %}
+                    <span class="badge badge-sm bg-gradient-secondary">{{ project.status }}</span>
                   </td>
                   <td class="text-center align-middle">
                     <div class="d-flex justify-content-center">
                       <div class="btn-group" role="group">
-                        <a href="#"
+                        <a href="{% url 'current_loan_book' company_slug=company.slug project_slug=project.slug stage='stage_1' %}"
                            class="btn btn-sm btn-outline-primary px-3 me-1"
                            data-bs-toggle="tooltip"
                            title="View Project">

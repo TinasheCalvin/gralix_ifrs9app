@@ -226,7 +226,7 @@ class Project(models.Model):
         self.save(update_fields=['ecl_calculation_data'])
 
     def __str__(self):
-        return f"{self.company.name} - {self.name} ({self.reporting_date})"
+        return f"{self.name} - ({self.reporting_date})"
 
 
 class IFRS9StageSummary(models.Model):
