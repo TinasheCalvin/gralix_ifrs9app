@@ -1,5 +1,7 @@
 import os
 
+# from django.conf.global_settings import SESSION_EXPIRE_AT_BROWSER_CLOSE
+
 """
 Django settings for ifrs9app project.
 
@@ -82,23 +84,23 @@ WSGI_APPLICATION = 'ifrs9app.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.1/ref/settings/#databases
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
-    }
-}
-
 # DATABASES = {
 #     'default': {
-#         'ENGINE': 'django.db.backends.mysql',
-#         'NAME': 'ifrs9app',
-#         'USER': 'root',
-#         'PASSWORD': 'root@123',
-#         'HOST':'localhost',
-#         'PORT':'3306',
+#         'ENGINE': 'django.db.backends.sqlite3',
+#         'NAME': BASE_DIR / 'db.sqlite3',
 #     }
 # }
+
+DATABASES = {
+    'default': {
+        'ENGINE': 'django.db.backends.mysql',
+        'NAME': 'ifrs9app',
+        'USER': 'root',
+        'PASSWORD': 'root@123',
+        'HOST':'localhost',
+        'PORT':'3306',
+    }
+}
 
 
 # Password validation
@@ -151,6 +153,9 @@ MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
 SESSION_COOKIE_SECURE = True  # If you use HTTPS
 SESSION_COOKIE_HTTPONLY = True
+
+SESSION_COOKIE_AGE = 3600 # 1-Hour max session age
+SESSION_EXPIRE_AT_BROWSER_CLOSE = True
 
 DATA_UPLOAD_MAX_NUMBER_FIELDS = 20000
 
