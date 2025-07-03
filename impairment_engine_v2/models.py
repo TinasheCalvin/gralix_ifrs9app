@@ -9,7 +9,7 @@ from datetime import date
 
 
 class Company(models.Model):
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    guid = models.UUIDField(default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=100, unique=True)
     description = models.TextField(max_length=200, blank=True)
     slug = models.SlugField(max_length=100, unique=True, blank=True)
@@ -17,8 +17,8 @@ class Company(models.Model):
     base_currency = models.CharField(max_length=3, default='ZMW')
 
     # IFRS9 Configuration Presets
-    stage_1_threshold_days = models.IntegerField(default=30, help_text="Days past due threshold for Stage 2")
-    stage_2_threshold_days = models.IntegerField(default=90, help_text="Days past due threshold for Stage 3")
+    stage_1_threshold_days = models.IntegerField(default=30, help_text="Days past due threshold for Stage 1")
+    stage_2_threshold_days = models.IntegerField(default=90, help_text="Days past due threshold for Stage 2")
     sicr_threshold_percent = models.DecimalField(
         max_digits=5, decimal_places=2, default=Decimal('50.00'),
         help_text="SICR threshold percentage for PD deterioration"
@@ -83,7 +83,7 @@ class Project(models.Model):
         ('archived', 'Archived')
     ]
 
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    guid = models.UUIDField(default=uuid.uuid4, editable=False)
     company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name='projects')
     name = models.CharField(max_length=200)
     slug = models.SlugField(max_length=200, blank=True)
