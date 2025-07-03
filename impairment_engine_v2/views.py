@@ -59,6 +59,26 @@ def create_company(request):
             company = form.save(commit=False)
             company.created_by = request.user
             company.save()
+
+            # Temporarily create branch mappings
+            branches = [
+                ('CHIPATA', 'ZW0010001'),
+                ('KABWE', 'ZW0010002'),
+                ('MANDA HILL', 'ZW0010003'),
+                ('CENTRO MALL', 'ZW0010004'),
+                ('CAIRO ROAD', 'ZW0010005'),
+                ('LONG ACRES', 'ZW0010006'),
+                ('KITWE', 'ZW0010007'),
+                ('NDOLA', 'ZW0010008'),
+                ('LUSAKA', 'ZW0010009'),
+            ]
+            for name, code in branches:
+                BranchMapping.objects.create(
+                    company=company,
+                    branch_name=name,
+                    branch_code=code,
+                    is_active=True
+                )
             messages.success(request, "Company Added Successfully!")
             return HttpResponseRedirect(reverse('index'))
     else:
@@ -238,26 +258,22 @@ def data_upload_wizard(request, company_slug, project_slug):
 
 @login_required
 def process_sheet_selection(request, company_slug, project_slug):
-    print(f"DEBUG: process_sheet_selection called")
-    print(f"DEBUG: Request method: {request.method}")
-    print(f"DEBUG: Session keys: {list(request.session.keys())}")
-    print(f"DEBUG: upload_data in session: {'upload_data' in request.session}")
-
     if 'upload_data' in request.session:
         print(f"DEBUG: upload_data contents: {list(request.session['upload_data'].keys())}")
 
     if 'upload_data' not in request.session:
-        print(f"DEBUG: No upload_data in session, redirecting to upload_wizard")
+        print(f"DEBUG: No upload_data in session, redirecting to step 1 of the data upload component.")
         messages.error(request, "Please select an excel file for upload.")
         return redirect('upload_wizard', company_slug=company_slug, project_slug=project_slug)
 
     if request.method == 'POST':
         loan_sheet = request.POST.get('loan_sheet')
         arrears_sheet = request.POST.get('arrears_sheet')
-        print(f"DEBUG: POST data - loan_sheet: {loan_sheet}, arrears_sheet: {arrears_sheet}")
+        deposit_listing_sheet = request.POST.get('deposit_listing_sheet')
+        print(f"DEBUG: POST data - loan_sheet: {loan_sheet}, arrears_sheet: {arrears_sheet}, deposit_listing_sheet: {deposit_listing_sheet}")
 
-        if not loan_sheet or not arrears_sheet:
-            messages.error(request, "Please select both loan and arrears sheets")
+        if not loan_sheet or not arrears_sheet or not deposit_listing_sheet:
+            messages.error(request, "Please select loans, arrears and deposit listing sheets.")
             return render(request, 'impairment_engine/data_upload_wizard.html', {
                 'company_slug': company_slug,
                 'project_slug': project_slug,
@@ -268,7 +284,8 @@ def process_sheet_selection(request, company_slug, project_slug):
         # Store sheet selections in session
         request.session['upload_data'].update({
             'loan_sheet': loan_sheet,
-            'arrears_sheet': arrears_sheet
+            'arrears_sheet': arrears_sheet,
+            'deposit_listing_sheet': deposit_listing_sheet
         })
         request.session.modified = True
         print(f"DEBUG: Updated session with sheet selections")
@@ -302,7 +319,7 @@ def process_column_mapping(request, company_slug, project_slug):
     ]
 
     if 'upload_data' not in request.session or 'loan_sheet' not in request.session['upload_data']:
-        print(f"DEBUG: Missing session data, redirecting to upload_wizard")
+        print(f"DEBUG: Missing session data, redirecting to step 1 of the data upload component.")
         messages.error(request, "Please complete previous steps first")
         return redirect('upload_wizard', company_slug=company_slug, project_slug=project_slug)
 
@@ -314,11 +331,14 @@ def process_column_mapping(request, company_slug, project_slug):
 
         loan_df = pd.read_excel(xls, sheet_name=request.session['upload_data']['loan_sheet'], nrows=1)
         arrears_df = pd.read_excel(xls, sheet_name=request.session['upload_data']['arrears_sheet'], nrows=1)
+        deposit_listing_df = pd.read_excel(xls, sheet_name=request.session['upload_data']['deposit_listing_sheet'], nrows=1)
 
         loan_columns = loan_df.columns.tolist()
         arrears_columns = arrears_df.columns.tolist()
+        deposit_listing_columns = deposit_listing_df.columns.tolist()
         print(f"DEBUG: Loan columns: {loan_columns}")
         print(f"DEBUG: Arrears columns: {arrears_columns}")
+        print(f"DEBUG: Deposit listing columns: {deposit_listing_columns}")
 
         # Check if bucket columns are present in arrears data
         bucket_columns_found = []
@@ -345,13 +365,13 @@ def process_column_mapping(request, company_slug, project_slug):
     # Define field mappings with descriptions
     loan_field_config = [
         ('account_number', 'Account Number', True),
-        ('branch', 'Branch', True),
-        ('client_name', 'Client Name', True),
+        # ('branch', 'Branch', True), # Prioritizing Deposit Listing
+        # ('client_name', 'Client Name', True), # Prioritizing Deposit Listing
         ('loan_type', 'Loan Type', True),
+        ('loan_amount', 'Loan Amount', True),
+        ('currency', 'Currency', True),
         ('opening_date', 'Opening Date', True),
         ('maturity_date', 'Maturity Date', True),
-        ('currency', 'Currency', True),
-        ('loan_amount', 'Loan Amount', True),
         ('installment_amount', 'Installment Amount', True),
         ('capital_balance', 'Capital Balance', True),
         ('interest_rate', 'Interest Rate', True),
@@ -359,6 +379,12 @@ def process_column_mapping(request, company_slug, project_slug):
         ('days_to_maturity', 'Days to Maturity', False),  # Can be computed
     ]
 
+    deposit_listing_field_config = [
+        ('account_number', 'Account Number', True),
+        ('branch', 'Branch', True),
+        ('client_name', 'Client Name', True),
+        ('sector', 'Sector', True),
+    ]
     # Conditional arrears field config based on bucket presence
     if bucket_columns_present:
         arrears_field_config = [
@@ -382,6 +408,7 @@ def process_column_mapping(request, company_slug, project_slug):
         mappings = {
             'loan_mappings': {},
             'arrears_mappings': {},
+            'deposit_listing_mappings': {},
         }
 
         # Process loan mappings
@@ -396,6 +423,12 @@ def process_column_mapping(request, company_slug, project_slug):
             if selected_column:
                 mappings['arrears_mappings'][field_name] = selected_column
 
+        # Process arrears mappings
+        for field_name, description, is_required in deposit_listing_field_config:
+            selected_column = request.POST.get(f'deposit_listing_{field_name}')
+            if selected_column:
+                mappings['deposit_listing_mappings'][field_name] = selected_column
+
         print(f"DEBUG: Mappings created: {mappings}")
 
         # Store mappings in session
@@ -408,8 +441,10 @@ def process_column_mapping(request, company_slug, project_slug):
         'project_slug': project_slug,
         'loan_columns': loan_columns,
         'arrears_columns': arrears_columns,
+        'deposit_listing_columns': deposit_listing_columns,
         'loan_field_config': loan_field_config,
         'arrears_field_config': arrears_field_config,
+        'deposit_listing_field_config': deposit_listing_field_config,
         'step': 3,
         'ARREARS_BUCKETS': ARREARS_BUCKETS,
         'has_bucket_columns': bucket_columns_present,
@@ -520,11 +555,6 @@ def finalize_data_upload_v2(request, company_slug, project_slug):
                 arrears_df.at[idx, 'arrears_amount'] = round(total_arrears, 2)
                 arrears_df.at[idx, 'days_past_due'] = max_dpd
 
-                # Debug print for the specific account
-                if row.get('account_number') == 'LD2308905320':  # Your example account
-                    print(
-                        f"DEBUG: Account {row.get('account_number')} - Total arrears: {total_arrears}, Max DPD: {max_dpd}")
-
             print(
                 f"DEBUG: Processed {len(arrears_df[arrears_df['arrears_amount'] > 0])} accounts with arrears from bucket format")
 
@@ -554,6 +584,21 @@ def finalize_data_upload_v2(request, company_slug, project_slug):
 
         print(f"Arrears columns after filtering: {arrears_df.columns}")
 
+        # Process deposit listing data
+        print(f"DEBUG: Processing deposit listing data")
+        deposit_listing_df = pd.read_excel(xls, sheet_name=upload_data['deposit_listing_sheet'])
+        print(f"Deposit Listing columns currently {deposit_listing_df.columns}")
+
+        # Invert the mapping to go from source_column -> target_column
+        deposit_listing_mapping_inverted = {v: k for k, v in upload_data['mappings']['deposit_listing_mappings'].items()}
+        print(f"DEBUG: Deposit Listing inverted: {deposit_listing_mapping_inverted}")
+        deposit_listing_df = deposit_listing_df.rename(columns=deposit_listing_mapping_inverted)
+
+        # Keep only mapped columns for loan data
+        deposit_listing_mapped_columns = list(deposit_listing_mapping_inverted.values())
+        deposit_listing_df = deposit_listing_df[deposit_listing_mapped_columns]
+        print(f"Loans columns after filtering: {deposit_listing_df.columns}")
+
         # Verify the account_number column exists before merging
         print(f"DEBUG: 'account_number' in loan_df: {'account_number' in loan_df.columns}")
         print(f"DEBUG: 'account_number' in arrears_df: {'account_number' in arrears_df.columns}")
@@ -565,6 +610,14 @@ def finalize_data_upload_v2(request, company_slug, project_slug):
             on='account_number',
             how='left',  # Keep all loans, even those without arrears
             suffixes=('', '_arrears')
+        )
+
+        # Merge deposit listing as well
+        merged_df = merged_df.merge(
+            deposit_listing_df,
+            on='account_number',
+            how='left',
+            suffixes=('', '_listing')
         )
 
         # Handle missing arrears data, set defaults for accounts not in arrears
@@ -623,7 +676,7 @@ def finalize_data_upload_v2(request, company_slug, project_slug):
 
         # Define the expected final columns
         expected_columns = [
-            'account_number', 'branch', 'client_name', 'loan_type', 'opening_date',
+            'client_name', 'branch', 'sector', 'account_number', 'loan_type', 'opening_date',
             'maturity_date', 'currency', 'loan_amount', 'capital_balance', 'interest_rate',
             'arrears_amount', 'days_past_due', 'exposure', 'loan_tenor',
             'days_to_maturity', 'loan_stage'
@@ -632,6 +685,15 @@ def finalize_data_upload_v2(request, company_slug, project_slug):
         # Filter to only keep expected columns that exist in the dataframe
         final_columns = [col for col in expected_columns if col in merged_df.columns]
         merged_df = merged_df[final_columns]
+
+        # Handle branch mapping on the branch column
+        def get_branch_name(branch_code):
+            branch = BranchMapping.objects.get(branch_code=branch_code, company=company)
+            if branch is not None:
+                return branch.branch_name
+            return branch_code
+
+        merged_df['branch'] = merged_df['branch'].apply(get_branch_name)
 
         # Ensure all columns are JSON serializable
         for col in merged_df.columns:
@@ -700,10 +762,9 @@ def current_loanbook(request, company_slug, project_slug, stage):
         'loan_type',
         'currency',
         'loan_amount',
-        'loan_tenor',
         'opening_date',
         'maturity_date',
-        'days_past_due'
+        'loan_tenor'
     ]
     
     staging_title = ''
@@ -723,6 +784,50 @@ def current_loanbook(request, company_slug, project_slug, stage):
     }
 
     return render(request, 'impairment_engine/current_loanbook.html', context)
+
+
+@login_required
+def current_cbl(request, company_slug, project_slug):
+    company = get_object_or_404(Company, slug=company_slug)
+    project = get_object_or_404(Project, slug=project_slug, company=company)
+
+    data = pd.DataFrame(project.loan_data)
+    # Data transformations to match rates
+    usd_rate = 13.7031
+    # Loan Amount
+    data["loan_amount"] = np.where(data["loan_amount"] == "USD", data["loan_amount"] * usd_rate, data["loan_amount"])
+    data["arrears_amount"] = np.where(data["arrears_amount"] == "USD", data["arrears_amount"] * usd_rate, data["arrears_amount"])
+    data["exposure"] = np.where(data["exposure"] == "USD", data["exposure"] * usd_rate, data["exposure"])
+    data["interest_rate"] = data["interest_rate"].astype(float).round(0).astype(int).astype(str) + "%"
+
+    # Ensure each row is a dict (not Series or string)
+    data_dicts = data.to_dict(orient="records")
+    paginator = Paginator(data_dicts, 25)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+
+    # Define columns to render
+    columns = [
+        'account_number',
+        'client_name',
+        'loan_type',
+        'sector',
+        'branch',
+        'interest_rate',
+        'currency',
+        'capital_balance',
+        'arrears_amount',
+        'exposure'
+    ]
+
+    context = {
+        'company': company,
+        'project': project,
+        'columns': columns,
+        'page_obj': page_obj
+    }
+
+    return render(request, 'impairment_engine/cbl.html', context)
 
 @login_required
 def manage_branch_mappings(request, company_slug):
