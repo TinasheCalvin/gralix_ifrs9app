@@ -11,6 +11,7 @@ urlpatterns = [
     path('company/<slug:company_slug>/projects/<slug:project_slug>/upload/mapping/', views.process_column_mapping, name='process_mapping'),
     path('company/<slug:company_slug>/projects/<slug:project_slug>/upload/finalize/', views.finalize_data_upload_v2, name='finalize_upload'),
     path('company/<slug:company_slug>/projects/<slug:project_slug>/loanbook/cbl', views.current_cbl, name='current_cbl'),
+    path('company/<slug:company_slug>/projects/<slug:project_slug>/loanbook/ead', views.current_exposure, name='current_exposure'),
     path('company/<slug:company_slug>/projects/<slug:project_slug>/loanbook/<slug:stage>', views.current_loanbook, name='current_loan_book'),
     path('company/<slug:company_slug>/projects/<slug:project_slug>/dashboard', views.dashboard, name='project_dashboard'),
 ]

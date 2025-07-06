@@ -638,7 +638,7 @@ def finalize_data_upload_v2(request, company_slug, project_slug):
         print(f"DEBUG: Calculating computed fields")
 
         # Calculate exposure
-        merged_df["exposure"] = merged_df['capital_balance'] + merged_df['arrears_amount']
+        merged_df["exposure"] = round((merged_df['capital_balance'] + merged_df['arrears_amount']), 2)
 
         # Calculate loan_tenor in months if dates are available
         if 'opening_date' in merged_df.columns and 'maturity_date' in merged_df.columns:
@@ -678,8 +678,8 @@ def finalize_data_upload_v2(request, company_slug, project_slug):
         expected_columns = [
             'client_name', 'branch', 'sector', 'account_number', 'loan_type', 'opening_date',
             'maturity_date', 'currency', 'loan_amount', 'capital_balance', 'interest_rate',
-            'arrears_amount', 'days_past_due', 'exposure', 'loan_tenor',
-            'days_to_maturity', 'loan_stage'
+            'installment_amount', 'arrears_amount', 'days_past_due', 'exposure',
+            'loan_tenor', 'days_to_maturity', 'loan_stage'
         ]
 
         # Filter to only keep expected columns that exist in the dataframe
@@ -828,6 +828,58 @@ def current_cbl(request, company_slug, project_slug):
     }
 
     return render(request, 'impairment_engine/cbl.html', context)
+
+
+@login_required
+def current_exposure(request, company_slug, project_slug):
+    company = get_object_or_404(Company, slug=company_slug)
+    project = get_object_or_404(Project, slug=project_slug, company=company)
+
+    data = pd.DataFrame(project.loan_data)
+    # Only take the loans with exposure
+    data = data[data["exposure"] > 0]
+
+    # Data transformations to match rates
+    usd_rate = 13.7031
+    data["loan_amount"] = np.where(data["loan_amount"] == "USD", round(data["loan_amount"] * usd_rate, 2), data["loan_amount"])
+    data["arrears_amount"] = np.where(data["arrears_amount"] == "USD", round(data["arrears_amount"] * usd_rate, 2), data["arrears_amount"])
+    data["exposure"] = np.where(data["exposure"] == "USD", round(data["exposure"] * usd_rate, 2), data["exposure"])
+    data["interest_rate"] = data["interest_rate"].astype(float).round(0).astype(int).astype(str) + "%"
+
+    data["net_disbursement"] = np.where(data["loan_type"] == "Micro Lease Loan", round(data["loan_amount"] * 0.7, 2), data["loan_amount"])
+    data["gross_disbursement"] = data["loan_amount"]
+
+    # Ensure each row is a dict (not Series or string)
+    data_dicts = data.to_dict(orient="records")
+    paginator = Paginator(data_dicts, 25)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+
+    # Define columns to render
+    columns = [
+        'account_number',
+        'client_name',
+        'loan_type',
+        'interest_rate',
+        'capital_balance',
+        'arrears_amount',
+        'net_disbursement',
+        'gross_disbursement',
+        'installment_amount',
+        'opening_date',
+        'maturity_date',
+        'exposure'
+    ]
+
+    context = {
+        'company': company,
+        'project': project,
+        'columns': columns,
+        'page_obj': page_obj
+    }
+
+    return render(request, 'impairment_engine/current_ead.html', context)
+
 
 @login_required
 def manage_branch_mappings(request, company_slug):
