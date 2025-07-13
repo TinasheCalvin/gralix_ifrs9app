@@ -2,7 +2,7 @@ from django import forms
 from django.core.exceptions import ValidationError
 from .models import (
     Company, Project, BranchMapping, CBLParameters,
-    DataUpload
+    DataUpload, LGDRiskFactor, LGDRiskFactorValue
 )
 
 
@@ -26,6 +26,45 @@ class CompanyForm(forms.ModelForm):
             'name': 'Company Name',
             'description': 'Description (optional)'
         }
+
+
+class LGDRiskFactorForm(forms.ModelForm):
+    name = forms.CharField(
+        widget=forms.TextInput(attrs={
+            'placeholder': 'e.g., Client Type, Collateral Type, Industry Sector'
+        })
+    )
+    description = forms.CharField(
+        widget=forms.Textarea(attrs={
+            'placeholder': 'Brief description of this risk factor and how it affects LGD calculations',
+            'rows': 3
+        }),
+        required=False
+    )
+
+    class Meta:
+        model = LGDRiskFactor
+        fields = ['name', 'description']
+
+
+class LGDRiskFactorValueForm(forms.ModelForm):
+    coefficient = forms.DecimalField(
+        max_digits=10, decimal_places=6, required=False,
+        label="OLS Coefficient (Optional)",
+        help_text="If you're using OLS-based LGD, provide a coefficient"
+    )
+
+    class Meta:
+        model = LGDRiskFactorValue
+        fields = ['name', 'lgd_percentage']
+
+    def save(self, commit=True):
+        instance = super().save(commit=False)
+        self.cleaned_coefficient = self.cleaned_data.get('coefficient')
+        if commit:
+            instance.save()
+        return instance
+
 
 class ProjectForm(forms.ModelForm):
     """Form for creating and editing projects"""

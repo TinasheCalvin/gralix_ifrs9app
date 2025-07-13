@@ -12,19 +12,21 @@ from django.core.paginator import Paginator
 from django.db import transaction
 from django.http import HttpResponseRedirect
 from django.shortcuts import render, get_object_or_404, redirect
-from django.template.defaultfilters import title
 from django.urls import reverse
 from django.views.decorators.http import require_http_methods
 
 from .forms import (
     CompanyForm, ProjectForm, BranchMappingForm, BranchMappingBulkForm,
-    CBLParametersForm, DataUploadForm, CompanyParametersUpdateForm
+    CBLParametersForm, DataUploadForm, CompanyParametersUpdateForm, LGDRiskFactorForm, LGDRiskFactorValueForm
 )
 from .models import (
-    Company, Project, BranchMapping, CBLParameters
+    Company, Project, BranchMapping, CBLParameters, LGDRiskFactor, OLSCoefficient
 )
 
 import logging
+
+from .utils import compute_lgd_from_ols, enrich_project_loan_data
+
 logger = logging.getLogger(__name__)
 
 
@@ -80,10 +82,61 @@ def create_company(request):
                     is_active=True
                 )
             messages.success(request, "Company Added Successfully!")
-            return HttpResponseRedirect(reverse('index'))
+            return redirect('configure_risk_factors', company_slug=company.slug)
     else:
         form = CompanyForm()
     return render(request, 'impairment_engine/create_company.html', {'form': form})
+
+
+@login_required
+def configure_risk_factors(request, company_slug):
+    company = get_object_or_404(Company, slug=company_slug)
+
+    if request.method == 'POST':
+        factor_form = LGDRiskFactorForm(request.POST)
+        if factor_form.is_valid():
+            factor = factor_form.save(commit=False)
+            factor.company = company
+            factor.save()
+            messages.success(request, f"Factor '{factor.name}' added.")
+            return redirect('configure_risk_factors', company_slug=company_slug)
+    else:
+        factor_form = LGDRiskFactorForm()
+
+    risk_factors = company.risk_factors.prefetch_related('values')
+
+    return render(request, 'impairment_engine/configure_risk_factors.html', {
+        'company': company,
+        'factor_form': factor_form,
+        'risk_factors': risk_factors
+    })
+
+
+@login_required
+def add_risk_factor_value(request, company_slug, factor_id):
+    factor = get_object_or_404(LGDRiskFactor, id=factor_id)
+    company = get_object_or_404(Company, slug=company_slug)
+
+    if request.method == 'POST':
+        form = LGDRiskFactorValueForm(request.POST)
+        if form.is_valid():
+            value = form.save(commit=False)
+            value.factor = factor
+            value.save()
+
+            # Check if user submitted OLS coefficient
+            coefficient = form.cleaned_coefficient
+            if coefficient is not None:
+                OLSCoefficient.objects.create(
+                    company=company,
+                    factor_value=value,
+                    coefficient=coefficient,
+                )
+            messages.success(request, f"Value '{value.name}' added to {factor.name}.")
+        else:
+            messages.warning(request, "Invalid form provided. Please try again.")
+    return redirect('configure_risk_factors', company_slug=factor.company.slug)
+
 
 
 @login_required
@@ -123,6 +176,12 @@ def company_projects(request, company_slug):
     if not request.user.is_superuser and company.created_by != request.user:
         messages.error(request, "You don't have permission to access this company.")
         return redirect('home')
+
+    # Check if L.G.D Factors have been set
+    risk_factors = company.risk_factors.prefetch_related('values')
+
+    if risk_factors.count() == 0:
+        return redirect('configure_risk_factors', company_slug=company.slug)
 
     projects_list = company.projects.all().order_by('-created_at')
     paginator = Paginator(projects_list, 15)
@@ -879,6 +938,81 @@ def current_exposure(request, company_slug, project_slug):
     }
 
     return render(request, 'impairment_engine/current_ead.html', context)
+
+
+@login_required
+def compute_project_lgd(request, company_slug, project_slug):
+    company = get_object_or_404(Company, slug=company_slug)
+    project = get_object_or_404(Project, slug=project_slug, company=company)
+    updated_loan_data = []
+
+    # transform the loan data
+    loan_data_df = enrich_project_loan_data(project)
+
+    # Iterate over DataFrame rows properly
+    for index, loan in loan_data_df.iterrows():
+        try:
+            # Convert pandas Series to dict for the compute function
+            loan_dict = loan.to_dict()
+            lgd = compute_lgd_from_ols(company, loan_dict)
+            loan_dict["computed_lgd"] = float(lgd)
+        except Exception as e:
+            print(e)
+            loan_dict["computed_lgd"] = None
+            loan_dict["lgd_error"] = str(e)
+
+        updated_loan_data.append(loan_dict)
+
+    project.loan_data = updated_loan_data
+    project.save()
+
+
+@login_required
+def current_loss_given_default(request, company_slug, project_slug):
+    company = get_object_or_404(Company, slug=company_slug)
+    project = get_object_or_404(Project, slug=project_slug, company=company)
+
+    data = pd.DataFrame(project.loan_data)
+    # Only take the loans with exposure
+    data = data[data["exposure"] > 0]
+
+    # Data transformations to match rates
+    usd_rate = 13.7031
+    data["loan_amount"] = np.where(data["loan_amount"] == "USD", round(data["loan_amount"] * usd_rate, 2), data["loan_amount"])
+    data["arrears_amount"] = np.where(data["arrears_amount"] == "USD", round(data["arrears_amount"] * usd_rate, 2), data["arrears_amount"])
+    data["exposure"] = np.where(data["exposure"] == "USD", round(data["exposure"] * usd_rate, 2), data["exposure"])
+    data["interest_rate"] = data["interest_rate"].astype(float).round(0).astype(int).astype(str) + "%"
+
+    # Check if LGD is computed
+    lgd_computed = "computed_lgd" in data.columns and data["computed_lgd"].notna().all()
+
+    # Ensure each row is a dict (not Series or string)
+    data_dicts = data.to_dict(orient="records")
+    paginator = Paginator(data_dicts, 25)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+
+    # Define columns to render
+    columns = [
+        'account_number',
+        'client_name',
+        'loan_type',
+        'interest_rate',
+        'loan_tenor',
+        'client_type',
+        'collateral_type',
+        'computed_lgd'
+    ]
+
+    context = {
+        'company': company,
+        'project': project,
+        'columns': columns,
+        'page_obj': page_obj,
+        'lgd_computed': lgd_computed
+    }
+
+    return render(request, 'impairment_engine/current_lgd.html', context)
 
 
 @login_required

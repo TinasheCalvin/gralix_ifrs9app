@@ -38,6 +38,10 @@ class Company(models.Model):
         help_text="Maximum LGD ceiling percentage"
     )
 
+    # LGD Params
+    gdp_value = models.DecimalField(max_digits=6, decimal_places=2, default=Decimal("3.00"))
+    gdp_coefficient = models.DecimalField(max_digits=10, decimal_places=6, default=Decimal("0.05"))
+
     # Operational settings
     created_at = models.DateTimeField(auto_now_add=True)
     is_active = models.BooleanField(default=True)
@@ -70,6 +74,42 @@ class BranchMapping(models.Model):
 
     def __str__(self):
         return f"{self.company.name} - {self.branch_name} ({self.branch_code})"
+
+
+class LGDRiskFactor(models.Model):
+    company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name='risk_factors')
+    name = models.CharField(max_length=100)
+    description = models.TextField(blank=True)
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        unique_together = ['company', 'name']
+
+    def __str__(self):
+        return self.name
+
+
+class LGDRiskFactorValue(models.Model):
+    factor = models.ForeignKey(LGDRiskFactor, on_delete=models.CASCADE, related_name='values')
+    name = models.CharField(max_length=100)  # Changed from 'value' to 'name'
+    lgd_percentage = models.DecimalField(max_digits=7, decimal_places=4, help_text="Loss Given Default percentage (e.g., 40.2345)")
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        unique_together = ['factor', 'name']
+
+    def __str__(self):
+        return f"{self.name} ({self.lgd_percentage}%)"
+
+
+class OLSCoefficient(models.Model):
+    company = models.ForeignKey(Company, on_delete=models.CASCADE)
+    factor_value = models.ForeignKey(LGDRiskFactorValue, on_delete=models.CASCADE, null=True, blank=True)
+    is_tenor = models.BooleanField(default=False)
+    coefficient = models.DecimalField(max_digits=10, decimal_places=6)
+
+    class Meta:
+        unique_together = ['company', 'factor_value']
 
 
 class Project(models.Model):

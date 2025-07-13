@@ -111,7 +111,7 @@
           </li>
           <li class="nav-item">
             {% with request.resolver_match.url_name as url_name %}
-            <a class="nav-link text-white {% if url_name == 'lgd_analysis' %}active bg-gradient-secondary{% endif %}" href="#">
+            <a class="nav-link text-white {% if url_name == 'current_loss_given_default' %}active bg-gradient-secondary{% endif %}" href="{% url 'current_loss_given_default' company_slug=company.slug project_slug=project.slug %}">
           
               <span class="nav-link-text ms-1">Loss Given Default</span>
             </a>
