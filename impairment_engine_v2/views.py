@@ -1,6 +1,8 @@
 import base64
 import csv
 import io
+from collections import defaultdict
+from decimal import Decimal
 from io import BytesIO
 import pandas as pd
 import numpy as np
@@ -10,22 +12,26 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
 from django.db import transaction
-from django.http import HttpResponseRedirect
+from django.http import HttpResponseRedirect, HttpResponse
 from django.shortcuts import render, get_object_or_404, redirect
 from django.urls import reverse
 from django.views.decorators.http import require_http_methods
+from openpyxl.reader.excel import load_workbook
+from openpyxl.workbook import Workbook
+from scripts.regsetup import description
 
 from .forms import (
     CompanyForm, ProjectForm, BranchMappingForm, BranchMappingBulkForm,
     CBLParametersForm, DataUploadForm, CompanyParametersUpdateForm, LGDRiskFactorForm, LGDRiskFactorValueForm
 )
+from .matrix_functions import ProjectPDProcessor, IFRS9PDCalculator
 from .models import (
-    Company, Project, BranchMapping, CBLParameters, LGDRiskFactor, OLSCoefficient
+    Company, Project, BranchMapping, CBLParameters, LGDRiskFactor, LGDRiskFactorValue, OLSCoefficient
 )
 
 import logging
 
-from .utils import compute_lgd_from_ols, enrich_project_loan_data
+from .utils import compute_cumulative_loan_gd, enrich_project_loan_data, compute_final_lgd
 
 logger = logging.getLogger(__name__)
 
@@ -86,6 +92,116 @@ def create_company(request):
     else:
         form = CompanyForm()
     return render(request, 'impairment_engine/create_company.html', {'form': form})
+
+
+@login_required
+def upload_risk_factors(request, company_slug):
+    company = get_object_or_404(Company, slug=company_slug)
+
+    if request.method == "POST" and request.FILES.get("excel_file"):
+        excel_file = request.FILES["excel_file"]
+        try:
+            # Read the Excel file
+            wb = load_workbook(excel_file, data_only=True)  # Add data_only to read values not formulas
+
+            # Process Risk Factors Sheet
+            if "Risk Factors" in wb.sheetnames:
+                factors_sheet = wb["Risk Factors"]
+                for row in factors_sheet.iter_rows(min_row=2, values_only=True):
+                    if not any(row):  # Skip empty rows
+                        continue
+                    try:
+                        accessor_key, name, desc = row[:3]  # Get first 3 columns
+                        LGDRiskFactor.objects.update_or_create(
+                            company=company,
+                            accessor_key=accessor_key,
+                            defaults={
+                                "name": name,
+                                "description": desc,
+                                "is_active": True,
+                            }
+                        )
+                    except (ValueError, IndexError) as e:
+                        messages.warning(request, f"Skipping invalid row in Risk Factors: {row} - {str(e)}")
+                        continue
+
+            # Process Risk Factor Values
+            if "Risk Factor Values" in wb.sheetnames:
+                values_sheet = wb["Risk Factor Values"]
+                for row in values_sheet.iter_rows(min_row=2, values_only=True):
+                    if not any(row):  # Skip empty rows
+                        continue
+                    try:
+                        factor_name, value_name, identifier, lgd_percentage, coefficient = row[:5]
+                        factor = LGDRiskFactor.objects.get(company=company, name=factor_name)
+                        factor_value, created = LGDRiskFactorValue.objects.update_or_create(
+                            factor=factor,
+                            name=value_name,
+                            defaults={
+                                "identifier": identifier,
+                                "lgd_percentage": Decimal(str(lgd_percentage)),
+                                "is_active": True,
+                            }
+                        )
+
+                        # Update or create OLSCoefficient
+                        OLSCoefficient.objects.update_or_create(
+                            company=company,
+                            factor_value=factor_value,
+                            defaults={"coefficient": Decimal(str(coefficient))}
+                        )
+                    except LGDRiskFactor.DoesNotExist:
+                        messages.warning(request, f"Factor not found: {factor_name} - skipping row")
+                        continue
+                    except (ValueError, IndexError) as e:
+                        messages.warning(request, f"Skipping invalid row in Factor Values: {row} - {str(e)}")
+                        continue
+                    except Exception as e:
+                        messages.warning(request, f"Error processing row: {row} - {str(e)}")
+                        continue
+
+            messages.success(request, "Risk Factors successfully imported from excel!")
+            return redirect("configure_risk_factors", company_slug=company.slug)
+
+        except Exception as e:
+            messages.error(request, f"Error processing excel file: {str(e)}")
+            return redirect("configure_risk_factors", company_slug=company.slug)
+
+    return render(request, "impairment_engine/upload_risk_factors.html", {
+        "company_slug": company_slug
+    })
+
+
+@login_required
+def download_risk_factors_template(request):
+    wb = Workbook()
+
+    # Create "Risk Factors" sheet (this becomes the active sheet)
+    factors_sheet = wb.active
+    factors_sheet.title = "Risk Factors"
+    factors_sheet.append(["Accessor Key", "Factor Name", "Description"])
+
+    # Add some example rows
+    factors_sheet.append(["client_type", "Client Type", "Type of client"])
+    factors_sheet.append(["collateral_type", "Collateral Type", "Type of collateral"])
+
+    # Create "Factor Values" sheet
+    values_sheet = wb.create_sheet("Risk Factor Values")
+    values_sheet.append(["Factor Name", "Value Name", "Unique Identifier", "LGD Percentage", "Coefficient"])
+
+    # Add some example rows
+    values_sheet.append(["Client Type", "Individual", "1", "45.00", "0.123456"])
+    values_sheet.append(["Client Type", "Corporate", "2", "35.00", "0.098765"])
+    values_sheet.append(["Collateral Type", "Real Estate", "1", "30.00", "0.080000"])
+
+    # Create response
+    response = HttpResponse(
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    )
+    response['Content-Disposition'] = 'attachment; filename=risk_factor_template.xlsx'
+    wb.save(response)
+
+    return response
 
 
 @login_required
@@ -727,18 +843,34 @@ def finalize_data_upload_v2(request, company_slug, project_slug):
 
         merged_df['loan_stage'] = merged_df['days_past_due'].apply(get_loan_stage)
 
-        # Debug: Print some examples
-        print(f"DEBUG: Sample DPD and stages:")
-        for idx, row in merged_df.head(10).iterrows():
-            print(
-                f"  Account: {row.get('account_number', 'N/A')}, DPD: {row['days_past_due']}, Stage: {row['loan_stage']}")
+        if 'model_pd' not in merged_df.columns:
+            merged_df['model_pd'] = None
+
+        # Randomly assign PDs for loan stage
+        def generate_random_pd(loan_stage):
+            if loan_stage == 'stage_1':
+                # Stage 1 Loans low PD between 1 and 6%
+                return round(random.uniform(0.01, 0.06), 8)
+            elif loan_stage == 'stage_2':
+                return round(random.uniform(0.075, 0.15), 8)
+            else:
+                return round(random.uniform(0.16, 0.35), 8)
+
+        # only fill in the random PD if not provided for the loan
+        if merged_df['model_pd'].isna().any():
+            mask = merged_df['model_pd'].isna()
+            merged_df.loc[mask, 'model_pd'] = merged_df.loc[mask, 'model_pd'].apply(generate_random_pd)
+        elif (merged_df['model_pd'] == 0).any():
+            # Alternatively, if existing PDs are 0 (rather than NA), treat them as missing
+            mask = merged_df['model_pd'] == 0
+            merged_df.loc[mask, 'model_pd'] = merged_df.loc[mask, 'loan_stage'].apply(generate_random_pd)
 
         # Define the expected final columns
         expected_columns = [
             'client_name', 'branch', 'sector', 'account_number', 'loan_type', 'opening_date',
             'maturity_date', 'currency', 'loan_amount', 'capital_balance', 'interest_rate',
             'installment_amount', 'arrears_amount', 'days_past_due', 'exposure',
-            'loan_tenor', 'days_to_maturity', 'loan_stage'
+            'loan_tenor', 'days_to_maturity', 'loan_stage', 'model_pd'
         ]
 
         # Filter to only keep expected columns that exist in the dataframe
@@ -825,7 +957,7 @@ def current_loanbook(request, company_slug, project_slug, stage):
         'maturity_date',
         'loan_tenor'
     ]
-    
+
     staging_title = ''
     if stage == 'stage_1':
         staging_title = 'Stage 1 Loans - Performing'
@@ -949,23 +1081,45 @@ def compute_project_lgd(request, company_slug, project_slug):
     # transform the loan data
     loan_data_df = enrich_project_loan_data(project)
 
-    # Iterate over DataFrame rows properly
+    # First pass: compute all cumulative GDs and store them
+    cumulative_gds = []
+    loan_dicts = []
+
     for index, loan in loan_data_df.iterrows():
+        loan_dict = loan.to_dict()
         try:
-            # Convert pandas Series to dict for the compute function
-            loan_dict = loan.to_dict()
-            lgd = compute_lgd_from_ols(company, loan_dict)
-            loan_dict["computed_lgd"] = float(lgd)
+            cumulative_gd = compute_cumulative_loan_gd(company, loan_dict)
+            loan_dict["cumulative_gd"] = float(cumulative_gd)
+            cumulative_gds.append(float(cumulative_gd))
         except Exception as e:
             print(e)
-            loan_dict["computed_lgd"] = None
+            loan_dict["cumulative_gd"] = None
             loan_dict["lgd_error"] = str(e)
 
-        updated_loan_data.append(loan_dict)
+        loan_dicts.append(loan_dict)
 
-    project.loan_data = updated_loan_data
+    # Calculate count of records per cumulative GD (rounded to 6 decimals)
+    gd_counts = defaultdict(int)
+    for gd in cumulative_gds:
+        rounded_gd = round(gd, 6)
+        gd_counts[rounded_gd] += 1
+
+        # Second pass: compute final LGD for each loan using the new method
+        for loan_dict in loan_dicts:
+            if loan_dict.get("cumulative_gd") is not None:
+                rounded_gd = round(loan_dict["cumulative_gd"], 6)
+                count = gd_counts.get(rounded_gd, 1)
+
+                # Use the dedicated method for final LGD computation
+                loan_dict["computed_lgd"] = compute_final_lgd(
+                    cumulative_gd=loan_dict["cumulative_gd"],
+                    count=count
+                )
+
+    project.loan_data = loan_dicts
     project.save()
 
+    return redirect("current_loss_given_default", company_slug=company_slug, project_slug=project_slug)
 
 @login_required
 def current_loss_given_default(request, company_slug, project_slug):
@@ -1013,6 +1167,101 @@ def current_loss_given_default(request, company_slug, project_slug):
     }
 
     return render(request, 'impairment_engine/current_lgd.html', context)
+
+@login_required
+def compute_project_pd(request, company_slug, project_slug):
+    company = get_object_or_404(Company, slug=company_slug)
+    project = get_object_or_404(Project, slug=project_slug, company=company)
+    try:
+        calculator = IFRS9PDCalculator()
+        processor = ProjectPDProcessor(calculator)
+
+        # Compute and update the final PDs
+        processor.update_project_with_pds(project)
+
+        # Compute the lifetime PDs
+        processor.update_project_with_lifetime_pds(project)
+
+        redirect("current_probability_given_default", company_slug=company_slug, project_slug=project_slug)
+    except Exception as e:
+        print(e)
+        redirect("current_probability_of_default", company_slug=company_slug, project_slug=project_slug)
+
+@login_required
+def current_probability_of_default(request, company_slug, project_slug):
+    company = get_object_or_404(Company, slug=company_slug)
+    project = get_object_or_404(Project, slug=project_slug, company=company)
+
+    data = pd.DataFrame(project.loan_data)
+
+    # Check if LGD is computed
+    final_pd_computed = "final_pd" in data.columns and data["final_pd"].notna().all()
+
+    # Ensure each row is a dict (not Series or string)
+    data_dicts = data.to_dict(orient="records")
+    paginator = Paginator(data_dicts, 25)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+
+    # Define columns to render
+    columns = [
+        'account_number',
+        'client_name',
+        'loan_type',
+        'loan_tenor',
+        'interest_rate',
+        'model_pd',
+        'final_pd'
+    ]
+
+    context = {
+        'company': company,
+        'project': project,
+        'columns': columns,
+        'page_obj': page_obj,
+        'final_pd_computed': final_pd_computed
+    }
+
+    return render(request, 'impairment_engine/current_pd.html', context)
+
+
+@login_required
+def lifetime_probability_of_default(request, company_slug, project_slug):
+    company = get_object_or_404(Company, slug=company_slug)
+    project = get_object_or_404(Project, slug=project_slug, company=company)
+
+    data = pd.DataFrame(project.loan_data)
+
+    # Check if LGD is computed
+    lifetime_pd_computed = "lifetime_pd_yr1" in data.columns and data["lifetime_pd_yr1"].notna().all()
+
+    # Ensure each row is a dict (not Series or string)
+    data_dicts = data.to_dict(orient="records")
+    paginator = Paginator(data_dicts, 25)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+
+    # Define columns to render
+    columns = [
+        'account_number',
+        'client_name',
+        'lifetime_pd_yr1',
+        'lifetime_pd_yr2',
+        'lifetime_pd_yr3',
+        'lifetime_pd_yr4',
+        'lifetime_pd_yr5'
+    ]
+
+    context = {
+        'company': company,
+        'project': project,
+        'columns': columns,
+        'page_obj': page_obj,
+        'lifetime_pd_computed': lifetime_pd_computed
+    }
+
+    return render(request, 'impairment_engine/lifetime_pd.html', context)
+
 
 
 @login_required

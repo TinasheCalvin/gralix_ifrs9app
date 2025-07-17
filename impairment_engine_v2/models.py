@@ -78,11 +78,13 @@ class BranchMapping(models.Model):
 
 class LGDRiskFactor(models.Model):
     company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name='risk_factors')
+    accessor_key = models.CharField(max_length=50, help_text="Key to match with loan data fields")
     name = models.CharField(max_length=100)
     description = models.TextField(blank=True)
     is_active = models.BooleanField(default=True)
 
     class Meta:
+        unique_together = ['company', 'accessor_key']
         unique_together = ['company', 'name']
 
     def __str__(self):
@@ -92,11 +94,13 @@ class LGDRiskFactor(models.Model):
 class LGDRiskFactorValue(models.Model):
     factor = models.ForeignKey(LGDRiskFactor, on_delete=models.CASCADE, related_name='values')
     name = models.CharField(max_length=100)  # Changed from 'value' to 'name'
-    lgd_percentage = models.DecimalField(max_digits=7, decimal_places=4, help_text="Loss Given Default percentage (e.g., 40.2345)")
+    identifier = models.IntegerField(help_text="Unique LGD factor identifier e.g.")
+    lgd_percentage = models.DecimalField(max_digits=7, decimal_places=2, help_text="Loss Given Default percentage (e.g., 40.23)")
     is_active = models.BooleanField(default=True)
 
     class Meta:
         unique_together = ['factor', 'name']
+        unique_together = ["factor", "identifier"]
 
     def __str__(self):
         return f"{self.name} ({self.lgd_percentage}%)"

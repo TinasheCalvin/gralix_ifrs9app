@@ -103,9 +103,17 @@
           </li>
           <li class="nav-item">
             {% with request.resolver_match.url_name as url_name %}
-            <a class="nav-link text-white {% if 'probability' in url_name %}active bg-gradient-secondary{% endif %}" href="#">
+            <a class="nav-link text-white {% if 'probability' in url_name %}active bg-gradient-secondary{% endif %}" href="{% url 'current_probability_of_default' company_slug=company.slug project_slug=project.slug %}">
               
               <span class="nav-link-text ms-1">Probability of Default</span>
+            </a>
+            {% endwith %}
+          </li>
+          <li class="nav-item">
+            {% with request.resolver_match.url_name as url_name %}
+            <a class="nav-link text-white {% if 'lifetime' in url_name %}active bg-gradient-secondary{% endif %}" href="{% url 'lifetime_probability_of_default' company_slug=company.slug project_slug=project.slug %}">
+
+              <span class="nav-link-text ms-1">Lifetime PD</span>
             </a>
             {% endwith %}
           </li>

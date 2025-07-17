@@ -12,14 +12,14 @@
         <div class="card my-4">
           <div class="card-header p-0 position-relative mt-n4 mx-3 z-index-2">
             <div class="bg-gradient-secondary shadow-primary border-radius-lg pt-4 pb-3 d-flex justify-content-between align-items-center">
-              <h6 class="text-white text-capitalize ps-3">Loss Given Default (LGD)</h6>
+              <h6 class="text-white text-capitalize ps-3">Probability of Default (LGD)</h6>
 
 
-              <a href="{% url 'compute_project_lgd' company.slug project.slug %}" class="btn btn-sm btn-light me-3">
-                {% if not lgd_computed %}
-                  Calculate LGD
+              <a href="{% url 'compute_project_pd' company.slug project.slug %}" class="btn btn-sm btn-light me-3">
+                {% if not final_pd_computed %}
+                  Calculate PD
                 {% else %}
-                  Recalculate LGD
+                  Recalculate PD
                 {% endif %}
               </a>
             </div>
@@ -54,9 +54,9 @@
                     <td colspan="{{ columns|length }}" class="text-center py-4">
                       <div class="d-flex flex-column align-items-center">
                         <i class="fas fa-building fa-3x text-secondary mb-2"></i>
-                        <h6 class="text-muted">LGD Not yet calculated</h6>
+                        <h6 class="text-muted">PDs Not yet calculated</h6>
                         <a href="{% url 'compute_lgd_for_project' company.slug project.slug %}" class="btn btn-sm btn-primary mt-2">
-                          Calculate LGD
+                          Calculate PDs
                         </a>
                       </div>
                     </td>
