@@ -1,8 +1,6 @@
 import math
-from typing import Dict, List, Optional, Tuple
-from django.db import models
-from decimal import Decimal
-import json
+from typing import Dict, List, Optional
+
 
 class IFRS9PDCalculator:
     """

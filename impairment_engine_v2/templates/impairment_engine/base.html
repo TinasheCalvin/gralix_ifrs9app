@@ -143,7 +143,7 @@
           </li>
           <li class="nav-item">
             {% with request.resolver_match.url_name as url_name %}
-            <a class="nav-link text-white {% if url_name == 'fetch_ecl' %}active bg-gradient-secondary{% endif %}" href="#">
+            <a class="nav-link text-white {% if url_name == 'fetch_ecl' %}active bg-gradient-secondary{% endif %}" href="{% url 'expected_credit_loss' company_slug=company.slug project_slug=project.slug stage='stage_1' %}">
               
               <span class="nav-link-text ms-1">Expected Credit Loss</span>
             </a>

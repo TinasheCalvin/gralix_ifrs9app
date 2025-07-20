@@ -20,6 +20,7 @@ from openpyxl.reader.excel import load_workbook
 from openpyxl.workbook import Workbook
 from scripts.regsetup import description
 
+from .ecl_computations import ECLCalculator, ProjectECLProcessor
 from .forms import (
     CompanyForm, ProjectForm, BranchMappingForm, BranchMappingBulkForm,
     CBLParametersForm, DataUploadForm, CompanyParametersUpdateForm, LGDRiskFactorForm, LGDRiskFactorValueForm
@@ -92,6 +93,69 @@ def create_company(request):
     else:
         form = CompanyForm()
     return render(request, 'impairment_engine/create_company.html', {'form': form})
+
+
+@login_required
+def download_branch_mappings_template(request):
+    wb = Workbook()
+
+    # Create the branch mappings Excel sheet
+    branches_sheet = wb.active
+    branches_sheet.title = "Branch Mappings"
+    branches_sheet.append(["Branch Code", "Branch Name"])
+    # Add the mappings
+    branches_sheet.append(["ZM0010001", "Chipata"])
+    branches_sheet.append(["ZM0010002", "Lusaka"])
+    branches_sheet.append(["ZM0010003", "Kabwe"])
+    branches_sheet.append(["ZM0010004", "Cairo Road"])
+    branches_sheet.append(["ZM0010005", "Manda Hill"])
+    branches_sheet.append(["ZM0010006", "Long Acres"])
+    branches_sheet.append(["ZM0010007", "Ndola"])
+    branches_sheet.append(["ZM0010008", "Centro Mall"])
+    branches_sheet.append(["ZM0010009", "Kitwe"])
+
+    # Create response
+    response = HttpResponse(
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    )
+    response['Content-Disposition'] = 'attachment; filename=branch_mappings_template.xlsx'
+    wb.save(response)
+
+    return response
+
+
+@login_required
+def upload_branch_mappings(request, company_slug):
+    company = get_object_or_404(Company, slug=company_slug)
+
+    if request.method == 'POST' and request.FILES.get("excel_file"):
+        excel_file = request.FILES["excel_file"]
+        try:
+            # Read the Excel file
+            wb = load_workbook(excel_file, data_only=True)  # Add data_only to read values not formulas
+            if "Branch Mappings" in wb.sheetnames:
+                ws = wb["Branch Mappings"]
+                for row in ws.iter_rows(min_row=2, values_only=True):
+                    if not any(row):  # Skip empty rows
+                        continue
+                    try:
+                        branch_code, branch_name = row[:2]
+                        BranchMapping.objects.create(
+                            branch_code=branch_code,
+                            branch_name=branch_name,
+                        )
+                    except (ValueError, IndexError) as e:
+                        messages.warning(request, f"Skipping invalid row in Branch Mappings: {row} - {str(e)}")
+                        continue
+            messages.success(request, "Branch Mappings Uploaded Successfully!")
+            redirect("upload_risk_factors", company_slug=company.slug)
+        except Exception as e:
+            messages.error(request, f"Error processing excel file: {str(e)}")
+            redirect("configure_branch_mappings", company_slug=company.slug)
+
+    return render(request, "impairment_engine/upload_branch_mappings.html", {
+        "company_slug": company_slug
+    })
 
 
 @login_required
@@ -252,7 +316,6 @@ def add_risk_factor_value(request, company_slug, factor_id):
         else:
             messages.warning(request, "Invalid form provided. Please try again.")
     return redirect('configure_risk_factors', company_slug=factor.company.slug)
-
 
 
 @login_required
@@ -817,8 +880,10 @@ def finalize_data_upload_v2(request, company_slug, project_slug):
 
         # Calculate loan_tenor in months if dates are available
         if 'opening_date' in merged_df.columns and 'maturity_date' in merged_df.columns:
-            merged_df['opening_date'] = pd.to_datetime(merged_df['opening_date'], errors='coerce')
-            merged_df['maturity_date'] = pd.to_datetime(merged_df['maturity_date'], errors='coerce')
+            # Add temporary date adjust of 1 year
+            merged_df['opening_date'] = pd.to_datetime(merged_df['opening_date'], errors='coerce') + pd.DateOffset(years=1)
+            merged_df['maturity_date'] = pd.to_datetime(merged_df['maturity_date'], errors='coerce') + pd.DateOffset(years=1)
+
             # Calculate loan tenor in months (approximate using 30.44 days per month)
             loan_tenor_days = (merged_df['maturity_date'] - merged_df['opening_date']).dt.days
             merged_df['loan_tenor'] = (loan_tenor_days / 30.44).round().astype('Int64')  # Round to nearest month
@@ -829,7 +894,7 @@ def finalize_data_upload_v2(request, company_slug, project_slug):
             days_to_maturity = (merged_df['maturity_date'] - today).dt.days
             merged_df['days_to_maturity'] = days_to_maturity.where(days_to_maturity >= 0, 0)
 
-        # Add loan stage based on days past due - FIXED LOGIC
+        # Add loan stage based on days past due
         def get_loan_stage(dpd):
             print(f"DEBUG: Calculating stage for DPD: {dpd} (type: {type(dpd)})")
             if pd.isna(dpd) or dpd == 0:
@@ -1262,6 +1327,68 @@ def lifetime_probability_of_default(request, company_slug, project_slug):
 
     return render(request, 'impairment_engine/lifetime_pd.html', context)
 
+
+@login_required
+def expected_credit_loss(request, company_slug, project_slug, stage):
+    company = get_object_or_404(Company, slug=company_slug)
+    project = get_object_or_404(Project, slug=project_slug, company=company)
+
+    data = pd.DataFrame(project.loan_data)
+    filtered_loans = data[data['loan_stage'] == stage]
+    loans_list = filtered_loans.to_dict(orient='records')
+
+    # Check if ECL has been computed
+    ecl_computed = "total_ecl" in data.columns and data["total_ecl"].notna().all()
+
+    paginator = Paginator(loans_list, 20)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+
+    # Define columns to render
+    columns = [
+        'account_number',
+        'loan_type',
+        'currency',
+        'loan_amount',
+        'total_ecl'
+    ]
+
+    staging_title = ''
+    if stage == 'stage_1':
+        staging_title = 'Stage 1 Loans - Performing'
+    elif stage == 'stage_2':
+        staging_title = 'Stage 2 Loans - Significant Increase in Credit Risk'
+    elif stage == 'stage_3':
+        staging_title = 'Stage 3 Loans - Non-Performing (Defaulted)'
+
+    context = {
+        'company': company,
+        'project': project,
+        'columns': columns,
+        'page_obj': page_obj,
+        'ecl_computed': ecl_computed,
+        'staging': staging_title
+    }
+
+    return render(request, 'impairment_engine/current_ecl.html', context)
+
+@login_required
+def compute_project_ecl(request, company_slug, project_slug):
+    company = get_object_or_404(Company, slug=company_slug)
+    project = get_object_or_404(Project, slug=project_slug, company=company)
+    try:
+        ecl_processor = ProjectECLProcessor()
+
+        # Compute and update the final ECL
+        ecl_processor.update_project_with_ecls(project)
+
+        # Update the project data
+        ecl_processor.update_project_with_ecls(project)
+
+        redirect("expected_credit_loss", company_slug=company.slug, project_slug=project.slug)
+    except Exception as e:
+        print(f"Error encountered whilst calculating ECL: {str(e)}")
+        redirect("expected_credit_loss", company_slug=company.slug, project_slug=project.slug)
 
 
 @login_required

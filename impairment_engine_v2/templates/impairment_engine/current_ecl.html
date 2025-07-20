@@ -1,0 +1,164 @@
+{% extends 'impairment_engine/base.html' %}
+{% load static %}
+{% load custom_tags %}
+
+{% block content %}
+<div class="container-fluid py-4">
+  <nav class="navbar navbar-main navbar-expand-lg px-0 mx-4 shadow-none border-radius-xl" id="navbarBlur" navbar-scroll="true">
+    <div class="container-fluid py-1 px-3">
+      <nav aria-label="breadcrumb">
+        <ul class="breadcrumb bg-transparent mb-0 pb-0 pt-1 px-0 me-sm-6 me-5">
+          <li class="breadcrumb-item text-sm">
+            <a class="opacity-5 text-dark"
+               href="{% url 'expected_credit_loss' company.slug project.slug 'stage_1' %}">
+               Stage 1
+            </a>
+          </li>
+          <li class="breadcrumb-item text-sm">
+            <a class="opacity-5 text-dark"
+               href="{% url 'expected_credit_loss' company.slug project.slug 'stage_2' %}">
+               Stage 2
+            </a>
+          </li>
+          <li class="breadcrumb-item text-sm">
+            <a class="opacity-5 text-dark"
+               href="{% url 'expected_credit_loss' company.slug project.slug 'stage_3' %}">
+               Stage 3
+            </a>
+          </li>
+        </ul>
+      </nav>
+    </div>
+  </nav>
+
+  <div class="container-fluid py-4">
+    <div class="row">
+      <div class="col-12">
+        <!-- Retained original card design -->
+        <div class="card my-4">
+          <div class="card-header p-0 position-relative mt-n4 mx-3 z-index-2">
+            <div class="bg-gradient-secondary shadow-primary border-radius-lg pt-4 pb-3 d-flex justify-content-between align-items-center">
+              <h6 class="text-white text-capitalize ps-3">{{ staging }}</h6>
+
+              <a href="{% url 'compute_project_ecl' company.slug project.slug %}" class="btn btn-sm btn-light me-3">
+                {% if not ecl_computed %}
+                  Calculate ECL
+                {% else %}
+                  Recalculate ECL
+                {% endif %}
+              </a>
+
+            </div>
+          </div>
+
+          <div class="card-body px-0 pb-2">
+            <div class="table-responsive p-0">
+              <table class="table table-hover align-middle mb-0">
+                <!-- Table headers -->
+                <thead class="bg-light">
+                  <tr>
+                    {% for col in columns %}
+                    <th class="text-uppercase text-secondary text-xs font-weight-semibold opacity-7 ps-3">
+                      {{ col|replace:"_, "|title }}
+                    </th>
+                    {% endfor %}
+                  </tr>
+                </thead>
+
+                <!-- Table rows -->
+                <tbody>
+                  {% for row in page_obj.object_list %}
+                  <tr class="border-bottom">
+                    {% for col in columns %}
+                    <td class="text-sm ps-3 py-3">
+                      <span class="text-dark">{{ row|get_item:col }}</span>
+                    </td>
+                    {% endfor %}
+                  </tr>
+                  {% empty %}
+                  <tr>
+                    <td colspan="{{ columns|length }}" class="text-center py-4 text-muted">
+                      No records found
+                    </td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+
+            <!-- Enhanced Pagination with better spacing -->
+            <div class="d-flex justify-content-between align-items-center mt-4 mb-3 px-4">
+              <div class="text-muted text-sm">
+                Showing page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}
+              </div>
+              <nav aria-label="Page navigation">
+                <ul class="pagination pagination-sm mb-0">
+                  {% if page_obj.has_previous %}
+                  <li class="page-item">
+                    <a class="page-link" href="?page=1" aria-label="First">
+                      <span aria-hidden="true">&laquo;</span>
+                    </a>
+                  </li>
+                  <li class="page-item">
+                    <a class="page-link" href="?page={{ page_obj.previous_page_number }}" aria-label="Previous">
+                      <span aria-hidden="true">&lsaquo;</span>
+                    </a>
+                  </li>
+                  {% else %}
+                  <li class="page-item disabled">
+                    <span class="page-link">&laquo;</span>
+                  </li>
+                  <li class="page-item disabled">
+                    <span class="page-link">&lsaquo;</span>
+                  </li>
+                  {% endif %}
+
+                  {% if page_obj.has_previous %}
+                  <li class="page-item">
+                    <a class="page-link" href="?page={{ page_obj.previous_page_number }}">
+                      {{ page_obj.previous_page_number }}
+                    </a>
+                  </li>
+                  {% endif %}
+
+                  <li class="page-item active">
+                    <span class="page-link">{{ page_obj.number }}</span>
+                  </li>
+
+                  {% if page_obj.has_next %}
+                  <li class="page-item">
+                    <a class="page-link" href="?page={{ page_obj.next_page_number }}">
+                      {{ page_obj.next_page_number }}
+                    </a>
+                  </li>
+                  {% endif %}
+
+                  {% if page_obj.has_next %}
+                  <li class="page-item">
+                    <a class="page-link" href="?page={{ page_obj.next_page_number }}" aria-label="Next">
+                      <span aria-hidden="true">&rsaquo;</span>
+                    </a>
+                  </li>
+                  <li class="page-item">
+                    <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}" aria-label="Last">
+                      <span aria-hidden="true">&raquo;</span>
+                    </a>
+                  </li>
+                  {% else %}
+                  <li class="page-item disabled">
+                    <span class="page-link">&rsaquo;</span>
+                  </li>
+                  <li class="page-item disabled">
+                    <span class="page-link">&raquo;</span>
+                  </li>
+                  {% endif %}
+                </ul>
+              </nav>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
