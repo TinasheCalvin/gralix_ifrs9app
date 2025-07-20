@@ -1,13 +1,14 @@
 import base64
 import csv
 import io
+import logging
+import random
 from collections import defaultdict
 from decimal import Decimal
 from io import BytesIO
-import pandas as pd
-import numpy as np
-import random
 
+import numpy as np
+import pandas as pd
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
@@ -18,9 +19,8 @@ from django.urls import reverse
 from django.views.decorators.http import require_http_methods
 from openpyxl.reader.excel import load_workbook
 from openpyxl.workbook import Workbook
-from scripts.regsetup import description
 
-from .ecl_computations import ECLCalculator, ProjectECLProcessor
+from .ecl_computations import ProjectECLProcessor
 from .forms import (
     CompanyForm, ProjectForm, BranchMappingForm, BranchMappingBulkForm,
     CBLParametersForm, DataUploadForm, CompanyParametersUpdateForm, LGDRiskFactorForm, LGDRiskFactorValueForm
@@ -29,9 +29,6 @@ from .matrix_functions import ProjectPDProcessor, IFRS9PDCalculator
 from .models import (
     Company, Project, BranchMapping, CBLParameters, LGDRiskFactor, LGDRiskFactorValue, OLSCoefficient
 )
-
-import logging
-
 from .utils import compute_cumulative_loan_gd, enrich_project_loan_data, compute_final_lgd
 
 logger = logging.getLogger(__name__)
@@ -1117,6 +1114,7 @@ def current_exposure(request, company_slug, project_slug):
         'client_name',
         'loan_type',
         'interest_rate',
+        'currency',
         'capital_balance',
         'arrears_amount',
         'net_disbursement',
@@ -1310,11 +1308,11 @@ def lifetime_probability_of_default(request, company_slug, project_slug):
     columns = [
         'account_number',
         'client_name',
-        'lifetime_pd_yr1',
-        'lifetime_pd_yr2',
-        'lifetime_pd_yr3',
-        'lifetime_pd_yr4',
-        'lifetime_pd_yr5'
+        'ltpd_yr1',
+        'ltpd_yr2',
+        'ltpd_yr3',
+        'ltpd_yr4',
+        'ltpd_yr5'
     ]
 
     context = {

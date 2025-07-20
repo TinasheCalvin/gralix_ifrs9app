@@ -31,9 +31,14 @@ def get_item(dictionary, key):
             return f"{round(float(value), 0):.0f} M"
         except (ValueError, TypeError):
             return value
-    if key == 'loan_amount':
+    if key in ['loan_amount','total_ecl','capital_balance','arrears_amount','exposure']:
         try:
             return f"{float(value):,.2f}"
+        except (ValueError, TypeError):
+            return value
+    if key in ['model_pd','final_pd','ltpd_yr1','ltpd_yr2','ltpd_yr3','ltpd_yr4','ltpd_yr5','computed_lgd']:
+        try:
+            return f"{float(value):,.6f}"
         except (ValueError, TypeError):
             return value
     if key == 'days_past_due':

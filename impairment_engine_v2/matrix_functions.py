@@ -463,7 +463,7 @@ class ProjectPDProcessor:
                 pd_grade_1 = self.get_pd_grade(model_pd)
 
                 # Compute the Z1, Z2 values
-                z1 = math.log10(model_pd)
+                z1 = -math.log(model_pd)
                 z2 = 0.027657553 + (-0.300785798 * 0.010444444)  # intercept + GDP Growth
                 z1_z2_sum = z1 + z2
 
@@ -475,9 +475,9 @@ class ProjectPDProcessor:
                 portfolio_PD = 0.263040845
                 portfolio_AP = 0.283
 
+
                 pit = ((1 - portfolio_PD) * portfolio_AP * expected_pd) / (
-                        portfolio_PD * (1 - portfolio_AP) * (1 - expected_pd) + (
-                        1 - portfolio_PD) * portfolio_AP * expected_pd)
+                            portfolio_PD * (1 - portfolio_AP) * (1 - expected_pd) + (1 - portfolio_PD) * portfolio_AP * expected_pd)
 
                 # Generate the lifetime PD - Year 1 is the expected PD
                 ltpd_yr1 = expected_pd
@@ -490,7 +490,8 @@ class ProjectPDProcessor:
                         try:
                             # Apply time decay to previous year's PD
                             time_decay_factor = 0.8  # Adjust this factor based on your model requirements
-                            base_pd = ltpd_values[-1] * time_decay_factor
+                            # base_pd = ltpd_values[-1] * time_decay_factor
+                            base_pd = ltpd_values[-1]
 
                             # Apply the z2 adjustment (economic cycle adjustment)
                             adjusted_logit = math.log(base_pd / (1 - base_pd)) + z2
@@ -537,16 +538,16 @@ class ProjectPDProcessor:
                 # Store the final variables for the loan account
                 results[account_number] = {
                     "expected_pd": expected_pd,
-                    "lifetime_pd_yr1": round(lifetime_pd_yr1, 8),
-                    "lifetime_pd_yr2": round(lifetime_pd_yr2, 8),
-                    "lifetime_pd_yr3": round(lifetime_pd_yr3, 8),
-                    "lifetime_pd_yr4": round(lifetime_pd_yr4, 8),
-                    "lifetime_pd_yr5": round(lifetime_pd_yr5, 8),
-                    "ltpd_yr1": ltpd_yr1,
-                    "ltpd_yr2": ltpd_yr2,
-                    "ltpd_yr3": ltpd_yr3,
-                    "ltpd_yr4": ltpd_yr4,
-                    "ltpd_yr5": ltpd_yr5,
+                    "lifetime_pd_yr1": round(lifetime_pd_yr1, 6),
+                    "lifetime_pd_yr2": round(lifetime_pd_yr2, 6),
+                    "lifetime_pd_yr3": round(lifetime_pd_yr3, 6),
+                    "lifetime_pd_yr4": round(lifetime_pd_yr4, 6),
+                    "lifetime_pd_yr5": round(lifetime_pd_yr5, 6),
+                    "ltpd_yr1": round(ltpd_yr1, 6),
+                    "ltpd_yr2": round(ltpd_yr2, 6),
+                    "ltpd_yr3": round(ltpd_yr3, 6),
+                    "ltpd_yr4": round(ltpd_yr4, 6),
+                    "ltpd_yr5": round(ltpd_yr5, 6),
                     # Additional useful metrics
                     "survival_yr1": survival_yr1,
                     "survival_yr2": survival_yr2,

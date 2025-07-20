@@ -21,7 +21,6 @@ class ECLCalculator:
         else:
             # Payments at end of the period
             pv = pmt * (1 - (1 + rate) ** (-nper)) / rate - fv / (1 + rate) ** nper
-
         return -pv
 
     @staticmethod
@@ -152,7 +151,7 @@ class ECLCalculator:
             exposure = (arrears_installments[year] + monitoring_fees[year] + present_value)
 
             ecl = lgd * lifetime_pds[year] * exposure
-            ecl_values.append(max(0.0, ecl))
+            ecl_values.append(max(0.0, round(ecl, 2)))
 
         return ecl_values
 
@@ -200,11 +199,11 @@ class ECLCalculator:
 
         # Get the PDs from loan data
         lifetime_pds = [
-            loan_data.get("lifetime_pd_yr1", 0.0),
-            loan_data.get("lifetime_pd_yr2", 0.0),
-            loan_data.get("lifetime_pd_yr3", 0.0),
-            loan_data.get("lifetime_pd_yr4", 0.0),
-            loan_data.get("lifetime_pd_yr5", 0.0),
+            loan_data.get("ltpd_yr1", 0.0),
+            loan_data.get("ltpd_yr2", 0.0),
+            loan_data.get("ltpd_yr3", 0.0),
+            loan_data.get("ltpd_yr4", 0.0),
+            loan_data.get("ltpd_yr5", 0.0),
         ]
 
         # Calculate outstanding payments
