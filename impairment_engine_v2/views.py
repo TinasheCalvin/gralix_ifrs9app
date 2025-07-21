@@ -404,14 +404,69 @@ def dashboard(request, company_slug, project_slug):
     company = get_object_or_404(Company, slug=company_slug)
     project = get_object_or_404(Project, slug=project_slug, company=company)
 
+    data = pd.DataFrame(project.loan_data)
+
+    # Data Transformation
+    usd_rate = 23.02
+    # data["exposure"] = np.where(data["currency"] == "USD", data["exposure"] * usd_rate, data["exposure"])
+    # data["total_ecl"] = np.where(data["currency"] == "USD", data["total_ecl"] * usd_rate, data["total_ecl"])
+
+    # Calculate metrics by loan stage
+    stage_metrics = data.groupby("loan_stage").agg(
+        total_ecl=('total_ecl', 'sum'),
+        total_exposure=('exposure', 'sum'),
+        loan_count=('account_number', 'count')
+    ).reset_index()
+
+    # Add percentage of total exposure for each stage
+    total_exposure = stage_metrics['total_exposure'].sum()
+    stage_metrics['exposure_pct'] = (stage_metrics['total_exposure'] / total_exposure * 100).round(2)
+
+
+
+    # Calculate metrics by loan type
+    loan_type_metrics = data.groupby('loan_type').agg(
+        total_ecl=('total_ecl', 'sum'),
+        total_exposure=('exposure', 'sum'),
+        loan_count=('account_number', 'count')
+    ).reset_index()
+
+    # Add percentage of total exposure for each loan type
+    loan_type_metrics['exposure_pct'] = (loan_type_metrics['total_exposure'] / total_exposure * 100).round(2)
+    loan_type_metrics['type_pct'] = (loan_type_metrics['loan_count'] / len(data) * 100).round(2)
+
+    # Calculate overall metrics
+    overall_metrics = {
+        'loan_types': len(loan_type_metrics),
+        'total_loans': len(data),
+        'total_exposure': data['exposure'].sum(),
+        'total_ecl': data['total_ecl'].sum(),
+        'ecl_ratio': (data['total_ecl'].sum() / data['exposure'].sum() * 100).round(2) if data[
+                                                                                              'exposure'].sum() > 0 else 0,
+    }
+
+    # Convert DataFrames to dict for template
+    # stage_metrics_dict = stage_metrics.to_dict('records')
+    loan_type_metrics_dict = loan_type_metrics.to_dict('records')
+
+    stage_metrics_dict = {
+        metric['loan_stage']: metric
+        for metric in stage_metrics.to_dict('records')
+    }
+
     # Check permissions
     if not request.user.is_superuser and company.created_by != request.user:
         messages.error(request, "You don't have permission to access this project.")
         return redirect('home')
 
+    print(stage_metrics_dict)
+
     context = {
         'company': company,
-        'project': project
+        'project': project,
+        'stage_metrics': stage_metrics_dict,
+        'loan_type_metrics': loan_type_metrics_dict,
+        'overall_metrics': overall_metrics,
     }
 
     return render(request, 'impairment_engine/project_dashboard.html', context)
