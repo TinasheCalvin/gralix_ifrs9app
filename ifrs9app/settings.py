@@ -32,7 +32,7 @@ SECRET_KEY = 'django-insecure-f269oenn$oydvt_j9b2ge#%_8+jc^&9o31d+1ls5#+pgq)6)0z
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ['gralix-ifrs9app.onrender.com']
 
 AUTH_USER_MODEL = 'My_Users.MyUser'
 # Application definition
