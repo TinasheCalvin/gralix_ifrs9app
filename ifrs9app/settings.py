@@ -1,4 +1,5 @@
 import os
+import dj_database_url
 
 # from django.conf.global_settings import SESSION_EXPIRE_AT_BROWSER_CLOSE
 
@@ -52,6 +53,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -91,17 +93,24 @@ WSGI_APPLICATION = 'ifrs9app.wsgi.application'
 #     }
 # }
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.mysql',
-        'NAME': 'ifrs9app',
-        'USER': 'root',
-        'PASSWORD': 'root@123',
-        'HOST':'localhost',
-        'PORT':'3306',
-    }
-}
+# DATABASES = {
+#     'default': {
+#         'ENGINE': 'django.db.backends.mysql',
+#         'NAME': 'ifrs9app',
+#         'USER': 'root',
+#         'PASSWORD': 'root@123',
+#         'HOST':'localhost',
+#         'PORT':'3306',
+#     }
+# }
 
+DATABASES = {
+    'default': dj_database_url.config(
+        # Replace this value with your local database's connection string.
+        default='postgresql://postgres:postgres@localhost:5432/ifrs9',
+        conn_max_age=600
+    )
+}
 
 # Password validation
 # https://docs.djangoproject.com/en/5.1/ref/settings/#auth-password-validators
@@ -143,6 +152,12 @@ STATICFILES_DIRS = [
     BASE_DIR / 'static'
 ]
 
+if not DEBUG:
+    STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+    # Enable the WhiteNoise storage backend, which compresses static files to reduce disk use
+    # and renames the files with unique names for each version to support long-term caching
+    STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.1/ref/settings/#default-auto-field
 
@@ -154,7 +169,7 @@ MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 SESSION_COOKIE_SECURE = True  # If you use HTTPS
 SESSION_COOKIE_HTTPONLY = True
 
-SESSION_COOKIE_AGE = 600 # 1-Hour max session age
+SESSION_COOKIE_AGE = 6000 # 1-Hour max session age
 SESSION_EXPIRE_AT_BROWSER_CLOSE = True
 
 DATA_UPLOAD_MAX_NUMBER_FIELDS = 20000
